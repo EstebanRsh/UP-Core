@@ -1,0 +1,70 @@
+{
+  "info": {
+    "name": "UP-Core API — Pagos",
+    "_postman_id": "c41f5e0a-pagos",
+    "description": "Probar pagos: crear, listar, paginar y por factura (requiere login y factura emitida).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8000" },
+    { "key": "token", "value": "" },
+    { "key": "facturaId", "value": "1" },
+    { "key": "pagoId", "value": "" },
+    { "key": "nextCursor", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Login /users/login",
+      "event": [{ "listen":"test","script":{ "exec":[
+        "let j={}; try{j=pm.response.json()}catch(e){}",
+        "if(j && j.token){ pm.environment.set('token', j.token); }"
+      ], "type":"text/javascript" }}],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode":"raw", "raw":"{\n  \"email\": \"gerente@demo.local\",\n  \"password\": \"secret\"\n}" },
+        "url": { "raw": "{{baseUrl}}/users/login", "host": ["{{baseUrl}}"], "path": ["users","login"] }
+      }
+    },
+    {
+      "name": "Crear /pagos",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}", "type":"text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode":"raw", "raw":"{\n  \"factura_id\": {{facturaId}},\n  \"monto\": 15000,\n  \"metodo\": \"transferencia\",\n  \"referencia\": \"TX123\"\n}" },
+        "url": { "raw": "{{baseUrl}}/pagos", "host": ["{{baseUrl}}"], "path": ["pagos"] }
+      }
+    },
+    {
+      "name": "Por factura /pagos/factura/{{facturaId}}",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type":"text" }],
+        "url": { "raw": "{{baseUrl}}/pagos/factura/{{facturaId}}", "host": ["{{baseUrl}}"], "path": ["pagos","factura","{{facturaId}}"] }
+      }
+    },
+    {
+      "name": "Listar /pagos/all",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type":"text" }],
+        "url": { "raw": "{{baseUrl}}/pagos/all", "host": ["{{baseUrl}}"], "path": ["pagos","all"] }
+      }
+    },
+    {
+      "name": "Paginar /pagos/paginated",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}", "type":"text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode":"raw", "raw":"{\n  \"limit\": 25,\n  \"last_seen_id\": null\n}" },
+        "url": { "raw": "{{baseUrl}}/pagos/paginated", "host": ["{{baseUrl}}"], "path": ["pagos","paginated"] }
+      }
+    }
+  ]
+}

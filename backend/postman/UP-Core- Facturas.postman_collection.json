@@ -1,0 +1,97 @@
+{
+  "info": {
+    "name": "UP-Core API — Facturas",
+    "_postman_id": "bc1a8f7a-facturas",
+    "description": "Probar facturas: crear, listar, paginar, obtener, emitir, por contrato (requiere login).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8000" },
+    { "key": "token", "value": "" },
+    { "key": "contratoId", "value": "1" },
+    { "key": "facturaId", "value": "" },
+    { "key": "nextCursor", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Login /users/login",
+      "event": [{ "listen": "test", "script": { "exec": [
+        "let j={}; try{j=pm.response.json()}catch(e){}",
+        "if(j && j.token){ pm.environment.set('token', j.token); }"
+      ], "type":"text/javascript" }}],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"gerente@demo.local\",\n  \"password\": \"secret\"\n}" },
+        "url": { "raw": "{{baseUrl}}/users/login", "host": ["{{baseUrl}}"], "path": ["users","login"] }
+      }
+    },
+    {
+      "name": "Crear /facturas",
+      "event": [{ "listen": "test", "script": { "exec": [
+        "let j={}; try{j=pm.response.json()}catch(e){}",
+        "if(j && j.id){ pm.environment.set('facturaId', j.id); }"
+      ], "type":"text/javascript" }}],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"contrato_id\": {{contratoId}},\n  \"periodo_mes\": 8,\n  \"periodo_anio\": 2025\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/facturas", "host": ["{{baseUrl}}"], "path": ["facturas"] }
+      }
+    },
+    {
+      "name": "Listar /facturas/all",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type":"text" }],
+        "url": { "raw": "{{baseUrl}}/facturas/all", "host": ["{{baseUrl}}"], "path": ["facturas","all"] }
+      }
+    },
+    {
+      "name": "Paginar /facturas/paginated",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}", "type":"text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"limit\": 25,\n  \"last_seen_id\": null\n}" },
+        "url": { "raw": "{{baseUrl}}/facturas/paginated", "host": ["{{baseUrl}}"], "path": ["facturas","paginated"] }
+      }
+    },
+    {
+      "name": "Obtener /facturas/{{facturaId}}",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type":"text" }],
+        "url": { "raw": "{{baseUrl}}/facturas/{{facturaId}}", "host": ["{{baseUrl}}"], "path": ["facturas","{{facturaId}}"] }
+      }
+    },
+    {
+      "name": "Emitir /facturas/{{facturaId}}/emitir",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}", "type":"text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode":"raw", "raw": "{\n  \"vencimiento\": null\n}" },
+        "url": { "raw": "{{baseUrl}}/facturas/{{facturaId}}/emitir", "host": ["{{baseUrl}}"], "path": ["facturas","{{facturaId}}","emitir"] }
+      }
+    },
+    {
+      "name": "Por contrato /contratos/{{contratoId}}/facturas",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type":"text" }],
+        "url": { "raw": "{{baseUrl}}/contratos/{{contratoId}}/facturas", "host": ["{{baseUrl}}"], "path": ["contratos","{{contratoId}}","facturas"] }
+      }
+    }
+  ]
+}
