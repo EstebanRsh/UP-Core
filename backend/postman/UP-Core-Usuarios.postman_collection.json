@@ -1,0 +1,204 @@
+{
+  "info": {
+    "name": "UP-Core API — Usuarios",
+    "_postman_id": "7c7f7f3e-12f7-4bcd-a8b1-usuarios",
+    "description": "Colección Postman para probar endpoints de usuarios (hello, login, crear, listar, paginar).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "token",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Hello /",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            ""
+          ]
+        }
+      }
+    },
+    {
+      "name": "Login (email) /users/login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "let json;",
+              "try { json = pm.response.json(); } catch(e) { json = {}; }",
+              "if (json && json.token) {",
+              "  pm.environment.set('token', json.token);",
+              "  pm.test('Token guardado en environment', function () { pm.expect(pm.environment.get('token')).to.be.a('string'); });",
+              "} else {",
+              "  pm.test('Respuesta tiene token', function () { pm.expect.fail('No se encontró token en la respuesta'); });",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"gerente@demo.local\",\n  \"password\": \"secret\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/users/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "users",
+            "login"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Login (documento) /users/login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "let json;",
+              "try { json = pm.response.json(); } catch(e) { json = {}; }",
+              "if (json && json.token) {",
+              "  pm.environment.set('token', json.token);",
+              "  pm.test('Token guardado en environment', function () { pm.expect(pm.environment.get('token')).to.be.a('string'); });",
+              "} else {",
+              "  pm.test('Respuesta tiene token', function () { pm.expect.fail('No se encontró token en la respuesta'); });",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"documento\": \"30000000001\",\n  \"password\": \"secret\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/users/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "users",
+            "login"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Crear usuario /users/add",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"nuevo@demo.local\",\n  \"documento\": \"40000000001\",\n  \"password\": \"secret\",\n  \"role\": \"operador\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/users/add",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "users",
+            "add"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Listar todos /users/all",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/users/all",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "users",
+            "all"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Paginado /users/paginated",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"limit\": 25,\n  \"last_seen_id\": null\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/users/paginated",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "users",
+            "paginated"
+          ]
+        }
+      }
+    }
+  ]
+}

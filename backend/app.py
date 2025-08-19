@@ -8,7 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from configs.db import Base, engine
 import models.modelo
 
-# from routes.usuario import Usuario
+from routes.usuario import Usuario
+
 # from routes.cliente import Cliente
 # from routes.plan import Plan
 # from routes.contrato import Contrato
@@ -28,7 +29,7 @@ def on_startup():
     Base.metadata.create_all(bind=engine)
 
 
-# api_upcore.include_router(Usuario)
+api_upcore.include_router(Usuario)
 # api_upcore.include_router(Cliente)
 # api_upcore.include_router(Plan)
 # api_upcore.include_router(Contrato)
