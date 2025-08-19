@@ -1,0 +1,125 @@
+{
+  "info": {
+    "name": "UP-Core API — Planes",
+    "_postman_id": "1f7ad2a9-planes-demo",
+    "description": "Colección para probar login y endpoints de planes (hello, crear, listar, paginar, detalle, actualizar, desactivar).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8000" },
+    { "key": "token", "value": "" },
+    { "key": "planId", "value": "" },
+    { "key": "nextCursor", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Login (email) /users/login",
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "let json={}; try{json=pm.response.json()}catch(e){}",
+            "if(json && json.token){ pm.environment.set('token', json.token); }",
+            "pm.test('Token presente', function(){ pm.expect(pm.environment.get('token')).to.be.a('string'); });"
+          ],
+          "type": "text/javascript"
+        }
+      }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"gerente@demo.local\",\n  \"password\": \"secret\"\n}" },
+        "url": { "raw": "{{baseUrl}}/users/login", "host": ["{{baseUrl}}"], "path": ["users", "login"] }
+      }
+    },
+    {
+      "name": "Planes — Hello /planes/hello",
+      "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/planes/hello", "host": ["{{baseUrl}}"], "path": ["planes","hello"] } }
+    },
+    {
+      "name": "Planes — Crear /planes",
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "let j={}; try{j=pm.response.json()}catch(e){}",
+            "if(j && j.id){ pm.environment.set('planId', j.id); }",
+            "pm.test('planId guardado', function(){ pm.expect(pm.environment.get('planId')).to.not.be.empty; });"
+          ],
+          "type": "text/javascript"
+        }
+      }],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"Plan 100\",\n  \"vel_down\": 100,\n  \"vel_up\": 50,\n  \"precio_mensual\": 15000,\n  \"descripcion\": \"100/50 Mbps\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/planes", "host": ["{{baseUrl}}"], "path": ["planes"] }
+      }
+    },
+    {
+      "name": "Planes — Listar /planes/all",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+        "url": { "raw": "{{baseUrl}}/planes/all", "host": ["{{baseUrl}}"], "path": ["planes","all"] }
+      }
+    },
+    {
+      "name": "Planes — Paginado /planes/paginated",
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "let j={}; try{j=pm.response.json()}catch(e){}",
+            "if(j && j.next_cursor){ pm.environment.set('nextCursor', j.next_cursor); } else { pm.environment.unset('nextCursor'); }",
+            "pm.test('Paginado OK', function(){ pm.expect(j).to.have.property('planes'); });"
+          ],
+          "type": "text/javascript"
+        }
+      }],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"limit\": 25,\n  \"last_seen_id\": null\n}" },
+        "url": { "raw": "{{baseUrl}}/planes/paginated", "host": ["{{baseUrl}}"], "path": ["planes","paginated"] }
+      }
+    },
+    {
+      "name": "Planes — Obtener /planes/{{planId}}",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+        "url": { "raw": "{{baseUrl}}/planes/{{planId}}", "host": ["{{baseUrl}}"], "path": ["planes","{{planId}}"] }
+      }
+    },
+    {
+      "name": "Planes — Actualizar /planes/{{planId}}",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"precio_mensual\": 16000,\n  \"descripcion\": \"100/50 Mbps (ajuste)\"\n}" },
+        "url": { "raw": "{{baseUrl}}/planes/{{planId}}", "host": ["{{baseUrl}}"], "path": ["planes","{{planId}}"] }
+      }
+    },
+    {
+      "name": "Planes — Desactivar /planes/{{planId}}",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+        "url": { "raw": "{{baseUrl}}/planes/{{planId}}", "host": ["{{baseUrl}}"], "path": ["planes","{{planId}}"] }
+      }
+    }
+  ]
+}

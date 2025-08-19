@@ -2,17 +2,13 @@ import sys
 
 sys.tracebacklimit = 1
 from fastapi import FastAPI
-
 from fastapi.middleware.cors import CORSMiddleware
-
 from configs.db import Base, engine
 import models.modelo
-
 from routes.usuario import Usuario
-
 from routes.cliente import Cliente
+from routes.plan import Plan
 
-# from routes.plan import Plan
 # from routes.contrato import Contrato
 # from routes.factura import Factura
 
@@ -32,7 +28,7 @@ def on_startup():
 
 api_upcore.include_router(Usuario)
 api_upcore.include_router(Cliente)
-# api_upcore.include_router(Plan)
+api_upcore.include_router(Plan)
 # api_upcore.include_router(Contrato)
 # api_upcore.include_router(Factura)
 
