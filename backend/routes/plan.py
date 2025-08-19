@@ -9,17 +9,16 @@ from sqlalchemy import asc
 
 from configs.db import get_db
 from models.modelo import Plan as PlanModel
-from auth.security import Security
+from auth.roles import require_roles
 
 Plan = APIRouter()
 
 
-# ---------- Schemas ----------
 class InputPlanCreate(BaseModel):
     nombre: str = Field(min_length=2, max_length=120)
-    vel_down: int = Field(gt=0)  # Mbps
-    vel_up: int = Field(gt=0)  # Mbps
-    precio_mensual: float = Field(gt=0)  # ARS
+    vel_down: int = Field(gt=0)
+    vel_up: int = Field(gt=0)
+    precio_mensual: float = Field(gt=0)
     descripcion: Optional[str] = None
     activo: bool = True
 
@@ -38,15 +37,6 @@ class InputPaginatedRequest(BaseModel):
     last_seen_id: Optional[int] = None
 
 
-# ---------- Helpers ----------
-def _require_token(req: Request):
-    payload = Security.verify_token(req.headers)
-    if "iat" not in payload:
-        return payload, False
-    return payload, True
-
-
-# ---------- Rutas ----------
 @Plan.get("/planes/hello")
 def hello_planes():
     return "Hello Planes!!!"
@@ -54,18 +44,14 @@ def hello_planes():
 
 @Plan.post("/planes")
 def crear_plan(req: Request, body: InputPlanCreate, db: Session = Depends(get_db)):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
-        # unicidad por nombre
-        exists = db.query(PlanModel).filter(PlanModel.nombre == body.nombre).first()
-        if exists:
+        if db.query(PlanModel).filter(PlanModel.nombre == body.nombre).first():
             return JSONResponse(
                 status_code=409, content={"message": "Ya existe un plan con ese nombre"}
             )
-
         nuevo = PlanModel(
             nombre=body.nombre,
             vel_down=body.vel_down,
@@ -77,7 +63,6 @@ def crear_plan(req: Request, body: InputPlanCreate, db: Session = Depends(get_db
         db.add(nuevo)
         db.commit()
         db.refresh(nuevo)
-
         return JSONResponse(
             status_code=201,
             content={
@@ -98,11 +83,10 @@ def crear_plan(req: Request, body: InputPlanCreate, db: Session = Depends(get_db
 
 @Plan.get("/planes/all")
 def listar_planes(req: Request, db: Session = Depends(get_db)):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         rows: List[PlanModel] = db.query(PlanModel).order_by(asc(PlanModel.id)).all()
         salida = [
             {
@@ -128,16 +112,14 @@ def listar_planes(req: Request, db: Session = Depends(get_db)):
 def planes_paginados(
     req: Request, body: InputPaginatedRequest, db: Session = Depends(get_db)
 ):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         q = db.query(PlanModel).order_by(asc(PlanModel.id))
         if body.last_seen_id is not None:
             q = q.filter(PlanModel.id > body.last_seen_id)
         rows = q.limit(body.limit).all()
-
         salida = [
             {
                 "id": p.id,
@@ -163,11 +145,10 @@ def planes_paginados(
 
 @Plan.get("/planes/{plan_id}")
 def obtener_plan(plan_id: int, req: Request, db: Session = Depends(get_db)):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         p = db.get(PlanModel, plan_id)
         if not p:
             return JSONResponse(
@@ -196,26 +177,22 @@ def obtener_plan(plan_id: int, req: Request, db: Session = Depends(get_db)):
 def actualizar_plan(
     plan_id: int, body: InputPlanUpdate, req: Request, db: Session = Depends(get_db)
 ):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         p = db.get(PlanModel, plan_id)
         if not p:
             return JSONResponse(
                 status_code=404, content={"message": "Plan no encontrado"}
             )
-
         if body.nombre and body.nombre != p.nombre:
-            exists = db.query(PlanModel).filter(PlanModel.nombre == body.nombre).first()
-            if exists:
+            if db.query(PlanModel).filter(PlanModel.nombre == body.nombre).first():
                 return JSONResponse(
                     status_code=409,
                     content={"message": "Ya existe un plan con ese nombre"},
                 )
             p.nombre = body.nombre
-
         if body.vel_down is not None:
             p.vel_down = body.vel_down
         if body.vel_up is not None:
@@ -226,7 +203,6 @@ def actualizar_plan(
             p.descripcion = body.descripcion
         if body.activo is not None:
             p.activo = body.activo
-
         db.commit()
         db.refresh(p)
         return JSONResponse(status_code=200, content={"message": "Plan actualizado"})
@@ -240,17 +216,15 @@ def actualizar_plan(
 
 @Plan.delete("/planes/{plan_id}")
 def desactivar_plan(plan_id: int, req: Request, db: Session = Depends(get_db)):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         p = db.get(PlanModel, plan_id)
         if not p:
             return JSONResponse(
                 status_code=404, content={"message": "Plan no encontrado"}
             )
-
         p.activo = False
         db.commit()
         return JSONResponse(status_code=200, content={"message": "Plan desactivado"})

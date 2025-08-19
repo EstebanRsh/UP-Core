@@ -1,28 +1,24 @@
 # routes/usuario.py
-from typing import Optional, List
-from datetime import datetime
-
+from typing import Optional
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field
-
 from sqlalchemy.orm import Session
-from sqlalchemy import asc
 
 from configs.db import get_db
 from models.modelo import Usuario as UsuarioModel, RoleEnum
-from auth.security import Security  # ajusta a tu ruta real si es necesario
+from auth.security import Security
+from auth.roles import require_roles
 
 Usuario = APIRouter()
 
 
-# --------- Schemas (simples, locales al router) ---------
+# --------- Schemas ---------
 class InputUsuarioCreate(BaseModel):
-    # cualquiera de los dos puede venir; al menos uno requerido
     email: Optional[EmailStr] = None
     documento: Optional[str] = Field(default=None, max_length=11)
     password: str = Field(min_length=4)
-    role: RoleEnum = RoleEnum.operador  # por defecto operador
+    role: RoleEnum = RoleEnum.operador
 
 
 class InputLogin(BaseModel):
@@ -44,9 +40,9 @@ def hello_user():
 
 @Usuario.get("/users/all")
 def get_all_users(req: Request, db: Session = Depends(get_db)):
-    has_access = Security.verify_token(req.headers)
-    if "iat" not in has_access:
-        return JSONResponse(status_code=401, content=has_access)
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
 
     rows = db.query(UsuarioModel).order_by(UsuarioModel.id.asc()).all()
     return JSONResponse(
@@ -69,9 +65,9 @@ def get_all_users(req: Request, db: Session = Depends(get_db)):
 def get_users_paginated(
     req: Request, body: InputPaginatedRequest, db: Session = Depends(get_db)
 ):
-    has_access = Security.verify_token(req.headers)
-    if "iat" not in has_access:
-        return JSONResponse(status_code=401, content=has_access)
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
 
     q = db.query(UsuarioModel).order_by(UsuarioModel.id.asc())
     if body.last_seen_id is not None:
@@ -121,7 +117,6 @@ def login_user(us: InputLogin, db: Session = Depends(get_db)):
                 status_code=404, content={"message": "Usuario no encontrado"}
             )
 
-        # por ahora texto plano (luego pasamos a bcrypt)
         if user.password_hash != us.password:
             return JSONResponse(
                 status_code=401, content={"message": "Credenciales inválidas"}
@@ -154,7 +149,11 @@ def login_user(us: InputLogin, db: Session = Depends(get_db)):
 
 
 @Usuario.post("/users/add")
-def create_user(us: InputUsuarioCreate, db: Session = Depends(get_db)):
+def create_user(us: InputUsuarioCreate, req: Request, db: Session = Depends(get_db)):
+    # 👇 solo gerente puede crear
+    guard = require_roles(req.headers, {"gerente"})
+    if guard:
+        return guard
     try:
         if not us.email and not us.documento:
             return JSONResponse(
@@ -185,7 +184,7 @@ def create_user(us: InputUsuarioCreate, db: Session = Depends(get_db)):
         nuevo = UsuarioModel(
             email=us.email.lower() if us.email else None,
             documento=doc_norm,
-            password_hash=us.password,  # luego: hash
+            password_hash=us.password,  # TODO: reemplazar por hash
             role=us.role,
             activo=True,
         )

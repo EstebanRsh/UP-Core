@@ -15,11 +15,20 @@ class Security:
             or getattr(authUser, "email", None)
             or getattr(authUser, "documento", None)
         )
+        role = getattr(authUser, "role", None)
 
+        try:
+            role = role.value if hasattr(role, "value") else role
+        except Exception:
+            pass
         payload = {
             "iat": cls.hoy(),
             "exp": cls.hoy() + datetime.timedelta(minutes=480),
             "username": uname,
+            "role": role,  # 👈 ahora el token lleva el rol
+            "user_id": getattr(
+                authUser, "id", None
+            ),  # 👈 opcional, útil para ownership
         }
         try:
             return jwt.encode(payload, cls.secret, algorithm="HS256")
@@ -28,9 +37,10 @@ class Security:
 
     @classmethod
     def verify_token(cls, headers):
-        if headers["authorization"]:
+        auth = headers.get("authorization") if hasattr(headers, "get") else None
+        if auth:
             try:
-                tkn = headers["authorization"].split(" ")[1]
+                tkn = auth.split(" ")[1]
                 payload = jwt.decode(tkn, cls.secret, algorithms=["HS256"])
                 return payload
             except jwt.ExpiredSignatureError:

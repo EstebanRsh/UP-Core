@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import asc
 
 from configs.db import get_db
-from auth.security import Security
+from auth.roles import require_roles
 from models.modelo import (
     Contrato as ContratoModel,
     Cliente as ClienteModel,
@@ -20,13 +20,11 @@ from models.modelo import (
 Contrato = APIRouter()
 
 
-# ---------- Schemas ----------
 class InputContratoCreate(BaseModel):
     cliente_id: int
     plan_id: int
     direccion_instalacion: str
-    fecha_alta: Optional[date] = None  # por defecto hoy
-    # estado arranca en 'borrador' y podés activar con /{id}/activar
+    fecha_alta: Optional[date] = None
 
 
 class InputContratoUpdate(BaseModel):
@@ -42,14 +40,6 @@ class InputPaginatedRequest(BaseModel):
     last_seen_id: Optional[int] = None
 
 
-# ---------- Helpers ----------
-def _require_token(req: Request):
-    payload = Security.verify_token(req.headers)
-    if "iat" not in payload:
-        return payload, False
-    return payload, True
-
-
 def _ensure_exists(db: Session, model, id_: int, nombre: str):
     obj = db.get(model, id_)
     if not obj:
@@ -57,7 +47,6 @@ def _ensure_exists(db: Session, model, id_: int, nombre: str):
     return obj
 
 
-# ---------- Rutas ----------
 @Contrato.get("/contratos/hello")
 def hello_contratos():
     return "Hello Contratos!!!"
@@ -67,14 +56,12 @@ def hello_contratos():
 def crear_contrato(
     req: Request, body: InputContratoCreate, db: Session = Depends(get_db)
 ):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         cliente = _ensure_exists(db, ClienteModel, body.cliente_id, "Cliente")
         plan = _ensure_exists(db, PlanModel, body.plan_id, "Plan")
-
         nuevo = ContratoModel(
             cliente_id=cliente.id,
             plan_id=plan.id,
@@ -85,7 +72,6 @@ def crear_contrato(
         db.add(nuevo)
         db.commit()
         db.refresh(nuevo)
-
         return JSONResponse(
             status_code=201,
             content={
@@ -110,11 +96,10 @@ def crear_contrato(
 
 @Contrato.get("/contratos/all")
 def listar_contratos(req: Request, db: Session = Depends(get_db)):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         rows: List[ContratoModel] = (
             db.query(ContratoModel).order_by(asc(ContratoModel.id)).all()
         )
@@ -145,16 +130,14 @@ def listar_contratos(req: Request, db: Session = Depends(get_db)):
 def contratos_paginados(
     req: Request, body: InputPaginatedRequest, db: Session = Depends(get_db)
 ):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         q = db.query(ContratoModel).order_by(asc(ContratoModel.id))
         if body.last_seen_id is not None:
             q = q.filter(ContratoModel.id > body.last_seen_id)
         rows = q.limit(body.limit).all()
-
         salida = [
             {
                 "id": c.id,
@@ -171,7 +154,6 @@ def contratos_paginados(
             for c in rows
         ]
         next_cursor = salida[-1]["id"] if len(salida) == body.limit else None
-
         return JSONResponse(
             status_code=200, content={"contratos": salida, "next_cursor": next_cursor}
         )
@@ -184,11 +166,10 @@ def contratos_paginados(
 
 @Contrato.get("/contratos/{contrato_id}")
 def obtener_contrato(contrato_id: int, req: Request, db: Session = Depends(get_db)):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         c = db.get(ContratoModel, contrato_id)
         if not c:
             return JSONResponse(
@@ -223,17 +204,15 @@ def actualizar_contrato(
     req: Request,
     db: Session = Depends(get_db),
 ):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         c = db.get(ContratoModel, contrato_id)
         if not c:
             return JSONResponse(
                 status_code=404, content={"message": "Contrato no encontrado"}
             )
-
         if body.plan_id is not None:
             _ensure_exists(db, PlanModel, body.plan_id, "Plan")
             c.plan_id = body.plan_id
@@ -245,7 +224,6 @@ def actualizar_contrato(
             c.fecha_baja = body.fecha_baja
         if body.fecha_suspension is not None:
             c.fecha_suspension = body.fecha_suspension
-
         db.commit()
         return JSONResponse(
             status_code=200, content={"message": "Contrato actualizado"}
@@ -263,10 +241,10 @@ def actualizar_contrato(
 
 @Contrato.post("/contratos/{contrato_id}/activar")
 def activar_contrato(contrato_id: int, req: Request, db: Session = Depends(get_db)):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
         c = db.get(ContratoModel, contrato_id)
         if not c:
             return JSONResponse(
@@ -287,10 +265,10 @@ def activar_contrato(contrato_id: int, req: Request, db: Session = Depends(get_d
 
 @Contrato.post("/contratos/{contrato_id}/suspender")
 def suspender_contrato(contrato_id: int, req: Request, db: Session = Depends(get_db)):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
         c = db.get(ContratoModel, contrato_id)
         if not c:
             return JSONResponse(
@@ -310,10 +288,10 @@ def suspender_contrato(contrato_id: int, req: Request, db: Session = Depends(get
 
 @Contrato.post("/contratos/{contrato_id}/baja")
 def baja_contrato(contrato_id: int, req: Request, db: Session = Depends(get_db)):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
         c = db.get(ContratoModel, contrato_id)
         if not c:
             return JSONResponse(

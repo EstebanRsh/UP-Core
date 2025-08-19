@@ -7,10 +7,10 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from sqlalchemy.orm import Session
-from sqlalchemy import asc, func
+from sqlalchemy import asc
 
 from configs.db import get_db
-from auth.security import Security
+from auth.roles import require_roles
 from models.modelo import (
     Factura as FacturaModel,
     Contrato as ContratoModel,
@@ -21,13 +21,12 @@ from models.modelo import (
 Factura = APIRouter()
 
 
-# ---------- Schemas ----------
 class InputFacturaCreate(BaseModel):
     contrato_id: int
     periodo_mes: int = Field(ge=1, le=12)
     periodo_anio: int = Field(ge=2000, le=2100)
-    periodo_inicio: Optional[date] = None  # si no viene, se calcula
-    periodo_fin: Optional[date] = None  # si no viene, se calcula
+    periodo_inicio: Optional[date] = None
+    periodo_fin: Optional[date] = None
     mora: Optional[float] = None
     recargo: Optional[float] = None
     pdf_path: Optional[str] = None
@@ -50,14 +49,6 @@ class InputEmitir(BaseModel):
     vencimiento: Optional[date] = None
 
 
-# ---------- Helpers ----------
-def _require_token(req: Request):
-    payload = Security.verify_token(req.headers)
-    if "iat" not in payload:
-        return payload, False
-    return payload, True
-
-
 def _month_bounds(anio: int, mes: int) -> tuple[date, date]:
     first = date(anio, mes, 1)
     last_day = calendar.monthrange(anio, mes)[1]
@@ -69,7 +60,6 @@ def _float(n):
     return float(n) if n is not None else None
 
 
-# ---------- Rutas ----------
 @Factura.get("/facturas/hello")
 def hello_facturas():
     return "Hello Facturas!!!"
@@ -79,18 +69,20 @@ def hello_facturas():
 def crear_factura(
     req: Request, body: InputFacturaCreate, db: Session = Depends(get_db)
 ):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         contrato = db.get(ContratoModel, body.contrato_id)
         if not contrato:
             return JSONResponse(
                 status_code=404, content={"message": "Contrato no encontrado"}
             )
-
-        # Evitar duplicado de período
+        plan = db.get(PlanModel, contrato.plan_id)
+        if not plan:
+            return JSONResponse(
+                status_code=404, content={"message": "Plan del contrato no encontrado"}
+            )
         dup = (
             db.query(FacturaModel)
             .filter(
@@ -106,14 +98,6 @@ def crear_factura(
                 content={"message": "Ya existe factura para ese contrato y período"},
             )
 
-        # Precio del plan
-        plan = db.get(PlanModel, contrato.plan_id)
-        if not plan:
-            return JSONResponse(
-                status_code=404, content={"message": "Plan del contrato no encontrado"}
-            )
-
-        # Período
         p_ini, p_fin = (body.periodo_inicio, body.periodo_fin)
         if not p_ini or not p_fin:
             p_ini, p_fin = _month_bounds(body.periodo_anio, body.periodo_mes)
@@ -142,7 +126,6 @@ def crear_factura(
         db.commit()
         db.refresh(nueva)
 
-        # generar número con ID
         nueva.nro = f"{nueva.periodo_anio}{nueva.periodo_mes:02d}-{nueva.id:06d}"
         db.commit()
         db.refresh(nueva)
@@ -177,11 +160,10 @@ def crear_factura(
 
 @Factura.get("/facturas/all")
 def listar_facturas(req: Request, db: Session = Depends(get_db)):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         rows: List[FacturaModel] = (
             db.query(FacturaModel).order_by(asc(FacturaModel.id)).all()
         )
@@ -217,11 +199,10 @@ def listar_facturas(req: Request, db: Session = Depends(get_db)):
 def facturas_paginadas(
     req: Request, body: InputPaginatedRequest, db: Session = Depends(get_db)
 ):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         q = db.query(FacturaModel).order_by(asc(FacturaModel.id))
         if body.last_seen_id is not None:
             q = q.filter(FacturaModel.id > body.last_seen_id)
@@ -251,11 +232,10 @@ def facturas_paginadas(
 
 @Factura.get("/facturas/{factura_id}")
 def obtener_factura(factura_id: int, req: Request, db: Session = Depends(get_db)):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         f = db.get(FacturaModel, factura_id)
         if not f:
             return JSONResponse(
@@ -295,17 +275,15 @@ def actualizar_factura(
     req: Request,
     db: Session = Depends(get_db),
 ):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         f = db.get(FacturaModel, factura_id)
         if not f:
             return JSONResponse(
                 status_code=404, content={"message": "Factura no encontrada"}
             )
-
         changed = False
         if body.mora is not None:
             f.mora = body.mora
@@ -322,9 +300,7 @@ def actualizar_factura(
         if body.estado is not None:
             f.estado = body.estado
             changed = True
-
         if changed:
-            # recomputa total si cambió mora/recargo
             f.total = (f.subtotal or 0) + (f.mora or 0) + (f.recargo or 0)
             db.commit()
         return JSONResponse(status_code=200, content={"message": "Factura actualizada"})
@@ -340,17 +316,15 @@ def actualizar_factura(
 def emitir_factura(
     factura_id: int, body: InputEmitir, req: Request, db: Session = Depends(get_db)
 ):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         f = db.get(FacturaModel, factura_id)
         if not f:
             return JSONResponse(
                 status_code=404, content={"message": "Factura no encontrada"}
             )
-
         f.estado = EstadoFacturaEnum.emitida
         f.emitida_en = datetime.utcnow()
         f.vencimiento = body.vencimiento or (f.periodo_fin + timedelta(days=10))
@@ -368,11 +342,10 @@ def emitir_factura(
 def facturas_por_contrato(
     contrato_id: int, req: Request, db: Session = Depends(get_db)
 ):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         rows = (
             db.query(FacturaModel)
             .filter(FacturaModel.contrato_id == contrato_id)

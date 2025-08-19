@@ -9,7 +9,7 @@ from sqlalchemy import asc, func
 
 from configs.db import get_db
 from models.modelo import Cliente as ClienteModel, EstadoClienteEnum
-from auth.security import Security
+from auth.roles import require_roles
 
 Cliente = APIRouter()
 
@@ -47,16 +47,8 @@ def _norm_doc(doc: Optional[str]) -> Optional[str]:
 
 
 def _next_nro_cliente(db: Session) -> str:
-    # Simple: usa (max(id)+1) padded a 6 dígitos
     next_id = (db.query(func.coalesce(func.max(ClienteModel.id), 0)).scalar() or 0) + 1
     return f"{next_id:06d}"
-
-
-def _require_token(req: Request):
-    payload = Security.verify_token(req.headers)
-    if "iat" not in payload:
-        return payload, False
-    return payload, True
 
 
 # ------- Rutas -------
@@ -69,13 +61,11 @@ def hello_cliente():
 def crear_cliente(
     req: Request, body: InputClienteCreate, db: Session = Depends(get_db)
 ):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         doc = _norm_doc(body.documento)
-        # unicidad
         if db.query(ClienteModel).filter(ClienteModel.documento == doc).first():
             return JSONResponse(
                 status_code=409, content={"message": "Documento ya registrado"}
@@ -104,7 +94,6 @@ def crear_cliente(
         db.add(nuevo)
         db.commit()
         db.refresh(nuevo)
-
         return JSONResponse(
             status_code=201,
             content={
@@ -129,11 +118,10 @@ def crear_cliente(
 
 @Cliente.get("/clientes/all")
 def listar_clientes(req: Request, db: Session = Depends(get_db)):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         rows: List[ClienteModel] = (
             db.query(ClienteModel).order_by(asc(ClienteModel.id)).all()
         )
@@ -164,16 +152,14 @@ def listar_clientes(req: Request, db: Session = Depends(get_db)):
 def clientes_paginados(
     req: Request, body: InputPaginatedRequest, db: Session = Depends(get_db)
 ):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         q = db.query(ClienteModel).order_by(asc(ClienteModel.id))
         if body.last_seen_id is not None:
             q = q.filter(ClienteModel.id > body.last_seen_id)
         rows = q.limit(body.limit).all()
-
         salida = [
             {
                 "id": c.id,
@@ -190,7 +176,6 @@ def clientes_paginados(
             for c in rows
         ]
         next_cursor = salida[-1]["id"] if len(salida) == body.limit else None
-
         return JSONResponse(
             status_code=200, content={"clientes": salida, "next_cursor": next_cursor}
         )
@@ -203,11 +188,10 @@ def clientes_paginados(
 
 @Cliente.get("/clientes/{cliente_id}")
 def obtener_cliente(cliente_id: int, req: Request, db: Session = Depends(get_db)):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         c = db.get(ClienteModel, cliente_id)
         if not c:
             return JSONResponse(
@@ -242,18 +226,16 @@ def actualizar_cliente(
     req: Request,
     db: Session = Depends(get_db),
 ):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         c = db.get(ClienteModel, cliente_id)
         if not c:
             return JSONResponse(
                 status_code=404, content={"message": "Cliente no encontrado"}
             )
 
-        # unicidades si vienen cambiadas
         if body.documento:
             doc = _norm_doc(body.documento)
             exists = (
@@ -305,19 +287,16 @@ def actualizar_cliente(
 
 @Cliente.delete("/clientes/{cliente_id}")
 def eliminar_cliente(cliente_id: int, req: Request, db: Session = Depends(get_db)):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         c = db.get(ClienteModel, cliente_id)
         if not c:
             return JSONResponse(
                 status_code=404, content={"message": "Cliente no encontrado"}
             )
-
-        # baja lógica
-        c.estado = EstadoClienteEnum.inactivo
+        c.estado = EstadoClienteEnum.inactivo  # baja lógica
         db.commit()
         return JSONResponse(status_code=200, content={"message": "Cliente inactivado"})
     except Exception as ex:

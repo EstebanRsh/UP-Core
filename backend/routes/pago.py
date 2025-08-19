@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import asc, func
 
 from configs.db import get_db
-from auth.security import Security
+from auth.roles import require_roles
 from models.modelo import (
     Pago as PagoModel,
     Factura as FacturaModel,
@@ -21,27 +21,18 @@ from models.modelo import (
 Pago = APIRouter()
 
 
-# ---------- Schemas ----------
 class InputPagoCreate(BaseModel):
     factura_id: int
     monto: float = Field(gt=0)
     metodo: MetodoPagoEnum
     referencia: Optional[str] = None
     comprobante_path: Optional[str] = None
-    confirmar: bool = True  # si true, estado=confirmado; si false, registrado
+    confirmar: bool = True
 
 
 class InputPaginatedRequest(BaseModel):
     limit: int = Field(default=25, ge=1, le=100)
     last_seen_id: Optional[int] = None
-
-
-# ---------- Helpers ----------
-def _require_token(req: Request):
-    payload = Security.verify_token(req.headers)
-    if "iat" not in payload:
-        return payload, False
-    return payload, True
 
 
 def _float(n):
@@ -60,11 +51,9 @@ def _recalcular_estado_factura(db: Session, factura: FacturaModel):
     )
     if total_pagado >= float(factura.total or 0):
         factura.estado = EstadoFacturaEnum.pagada
-    # si querés marcar vencida, dejalo para un job nocturno; acá no lo tocamos
     return total_pagado
 
 
-# ---------- Rutas ----------
 @Pago.get("/pagos/hello")
 def hello_pagos():
     return "Hello Pagos!!!"
@@ -72,17 +61,15 @@ def hello_pagos():
 
 @Pago.post("/pagos")
 def crear_pago(req: Request, body: InputPagoCreate, db: Session = Depends(get_db)):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         f = db.get(FacturaModel, body.factura_id)
         if not f:
             return JSONResponse(
                 status_code=404, content={"message": "Factura no encontrada"}
             )
-
         nuevo = PagoModel(
             factura_id=f.id,
             fecha=datetime.utcnow(),
@@ -99,12 +86,9 @@ def crear_pago(req: Request, body: InputPagoCreate, db: Session = Depends(get_db
         db.add(nuevo)
         db.commit()
         db.refresh(nuevo)
-
-        # actualizar estado de factura si corresponde
         _recalcular_estado_factura(db, f)
         db.commit()
         db.refresh(f)
-
         return JSONResponse(
             status_code=201,
             content={
@@ -124,11 +108,10 @@ def crear_pago(req: Request, body: InputPagoCreate, db: Session = Depends(get_db
 
 @Pago.get("/pagos/factura/{factura_id}")
 def pagos_por_factura(factura_id: int, req: Request, db: Session = Depends(get_db)):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         rows: List[PagoModel] = (
             db.query(PagoModel)
             .filter(PagoModel.factura_id == factura_id)
@@ -157,11 +140,10 @@ def pagos_por_factura(factura_id: int, req: Request, db: Session = Depends(get_d
 
 @Pago.get("/pagos/all")
 def listar_pagos(req: Request, db: Session = Depends(get_db)):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         rows: List[PagoModel] = db.query(PagoModel).order_by(asc(PagoModel.id)).all()
         out = [
             {
@@ -185,11 +167,10 @@ def listar_pagos(req: Request, db: Session = Depends(get_db)):
 def pagos_paginados(
     req: Request, body: InputPaginatedRequest, db: Session = Depends(get_db)
 ):
+    guard = require_roles(req.headers, {"gerente", "operador"})
+    if guard:
+        return guard
     try:
-        _, ok = _require_token(req)
-        if not ok:
-            return JSONResponse(status_code=401, content={"message": "No autorizado"})
-
         q = db.query(PagoModel).order_by(asc(PagoModel.id))
         if body.last_seen_id is not None:
             q = q.filter(PagoModel.id > body.last_seen_id)
