@@ -89,6 +89,11 @@ def crear_contrato(
     try:
         cliente = _ensure_exists(db, ClienteModel, body.cliente_id, "Cliente")
         plan = _ensure_exists(db, PlanModel, body.plan_id, "Plan")
+        if not plan.activo:
+            return JSONResponse(
+                status_code=422,
+                content={"message": "No se puede crear contrato con plan inactivo"},
+            )
         nuevo = ContratoModel(
             cliente_id=cliente.id,
             plan_id=plan.id,
@@ -240,17 +245,46 @@ def actualizar_contrato(
             return JSONResponse(
                 status_code=404, content={"message": "Contrato no encontrado"}
             )
+
+        # Cambiar plan
         if body.plan_id is not None:
-            _ensure_exists(db, PlanModel, body.plan_id, "Plan")
-            c.plan_id = body.plan_id
+            plan = _ensure_exists(db, PlanModel, body.plan_id, "Plan")
+            if not plan.activo:
+                return JSONResponse(
+                    status_code=422,
+                    content={"message": "No se puede asignar plan inactivo"},
+                )
+            c.plan_id = plan.id
+
         if body.direccion_instalacion is not None:
             c.direccion_instalacion = body.direccion_instalacion
+
+        # Validaciones de transición de estado
         if body.estado is not None:
-            c.estado = body.estado
+            nuevo = body.estado
+            actual = c.estado
+            if actual == EstadoContratoEnum.baja and nuevo != EstadoContratoEnum.baja:
+                return JSONResponse(
+                    status_code=422,
+                    content={"message": "Contrato en BAJA no puede reactivarse"},
+                )
+            if nuevo == EstadoContratoEnum.activo:
+                plan = db.get(PlanModel, c.plan_id)
+                if not plan or not plan.activo:
+                    return JSONResponse(
+                        status_code=422,
+                        content={"message": "No se puede activar con plan inactivo"},
+                    )
+                if not c.fecha_alta:
+                    c.fecha_alta = date.today()
+
+            c.estado = nuevo
+
         if body.fecha_baja is not None:
             c.fecha_baja = body.fecha_baja
         if body.fecha_suspension is not None:
             c.fecha_suspension = body.fecha_suspension
+
         db.commit()
         return JSONResponse(
             status_code=200, content={"message": "Contrato actualizado"}
@@ -277,6 +311,17 @@ def activar_contrato(contrato_id: int, req: Request, db: Session = Depends(get_d
             return JSONResponse(
                 status_code=404, content={"message": "Contrato no encontrado"}
             )
+        if c.estado == EstadoContratoEnum.baja:
+            return JSONResponse(
+                status_code=422,
+                content={"message": "Contrato en BAJA no puede activarse"},
+            )
+        plan = db.get(PlanModel, c.plan_id)
+        if not plan or not plan.activo:
+            return JSONResponse(
+                status_code=422,
+                content={"message": "No se puede activar con plan inactivo"},
+            )
         c.estado = EstadoContratoEnum.activo
         if not c.fecha_alta:
             c.fecha_alta = date.today()
@@ -300,6 +345,11 @@ def suspender_contrato(contrato_id: int, req: Request, db: Session = Depends(get
         if not c:
             return JSONResponse(
                 status_code=404, content={"message": "Contrato no encontrado"}
+            )
+        if c.estado != EstadoContratoEnum.activo:
+            return JSONResponse(
+                status_code=422,
+                content={"message": "Solo contratos ACTIVOS pueden suspenderse"},
             )
         c.estado = EstadoContratoEnum.suspendido
         c.fecha_suspension = date.today()

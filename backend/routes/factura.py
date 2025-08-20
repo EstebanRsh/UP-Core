@@ -46,7 +46,7 @@ class InputPaginatedRequest(BaseModel):
 
 
 class InputEmitir(BaseModel):
-    vencimiento: Optional[date] = None
+    dias_vencimiento: int = Field(default=10, ge=1, le=60)
 
 
 def _month_bounds(anio: int, mes: int) -> tuple[date, date]:
@@ -356,9 +356,21 @@ def emitir_factura(
             return JSONResponse(
                 status_code=404, content={"message": "Factura no encontrada"}
             )
+        if f.estado == EstadoFacturaEnum.pagada:
+            return JSONResponse(
+                status_code=422,
+                content={"message": "No se puede emitir una factura ya pagada"},
+            )
+        total = float((f.subtotal or 0) + (f.mora or 0) + (f.recargo or 0))
+        if total <= 0:
+            return JSONResponse(
+                status_code=422,
+                content={"message": "Total debe ser mayor a 0 para emitir"},
+            )
         f.estado = EstadoFacturaEnum.emitida
         f.emitida_en = datetime.utcnow()
-        f.vencimiento = body.vencimiento or (f.periodo_fin + timedelta(days=10))
+        f.vencimiento = f.periodo_fin + timedelta(days=body.dias_vencimiento)
+        f.total = total
         db.commit()
         return JSONResponse(status_code=200, content={"message": "Factura emitida"})
     except Exception as ex:

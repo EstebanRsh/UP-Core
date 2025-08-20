@@ -11,7 +11,7 @@ from routes.plan import Plan
 from routes.contrato import Contrato
 from routes.factura import Factura
 from routes.pago import Pago
-
+from routes.facturacion import Facturacion
 
 api_upcore = FastAPI()
 
@@ -32,6 +32,7 @@ api_upcore.include_router(Plan)
 api_upcore.include_router(Contrato)
 api_upcore.include_router(Factura)
 api_upcore.include_router(Pago)
+api_upcore.include_router(Facturacion)
 
 
 api_upcore.add_middleware(
