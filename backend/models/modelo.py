@@ -1,4 +1,3 @@
-# models/modelo.py
 from datetime import date, datetime
 from enum import Enum
 
@@ -13,6 +12,7 @@ from sqlalchemy import (
     Numeric,
     Text,
     Enum as SAEnum,
+    UniqueConstraint,  # 👈 para la unicidad de factura por período
 )
 from sqlalchemy.orm import relationship
 
@@ -88,7 +88,9 @@ class Cliente(Base):
     apellido = Column(String(80), nullable=False)
     documento = Column(String(11), unique=True, index=True, nullable=False)
     telefono = Column(String(20), nullable=True)  # +549...
-    email = Column(String(120), nullable=True)
+    email = Column(
+        String(120), unique=True, index=True, nullable=True
+    )  # 👈 ahora unique+index
     direccion = Column(String(200), nullable=False)
     estado = Column(
         SAEnum(EstadoClienteEnum, name="estado_cliente_enum"),
@@ -112,7 +114,9 @@ class Plan(Base):
     vel_up = Column(Integer, nullable=False)  # Mbps
     precio_mensual = Column(Numeric(12, 2), nullable=False)  # ARS
     descripcion = Column(Text, nullable=True)
-    activo = Column(Boolean, nullable=False, default=True)
+    activo = Column(
+        Boolean, nullable=False, default=True, index=True
+    )  # 👈 index para filtros
     creado_en = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     contratos = relationship("Contrato", back_populates="plan")
@@ -141,6 +145,7 @@ class Contrato(Base):
         SAEnum(EstadoContratoEnum, name="estado_contrato_enum"),
         nullable=False,
         default=EstadoContratoEnum.borrador.value,
+        index=True,  # 👈 para listar por estado
     )
     fecha_suspension = Column(Date, nullable=True)
 
@@ -154,6 +159,12 @@ class Contrato(Base):
 # -----------------------------
 class Factura(Base):
     __tablename__ = "factura"
+    __table_args__ = (
+        # Evita duplicados del mismo período por contrato
+        UniqueConstraint(
+            "contrato_id", "periodo_anio", "periodo_mes", name="uq_factura_periodo"
+        ),
+    )
 
     id = Column(Integer, primary_key=True)
     nro = Column(
@@ -166,8 +177,8 @@ class Factura(Base):
         nullable=False,
     )
 
-    periodo_mes = Column(Integer, nullable=False)  # 1..12
-    periodo_anio = Column(Integer, nullable=False)  # ej. 2025
+    periodo_mes = Column(Integer, nullable=False, index=True)  # 1..12
+    periodo_anio = Column(Integer, nullable=False, index=True)  # ej. 2025
     periodo_inicio = Column(Date, nullable=False)
     periodo_fin = Column(Date, nullable=False)
 
@@ -180,6 +191,7 @@ class Factura(Base):
         SAEnum(EstadoFacturaEnum, name="estado_factura_enum"),
         nullable=False,
         default=EstadoFacturaEnum.borrador.value,
+        index=True,  # 👈 filtrar por estado
     )
     emitida_en = Column(DateTime, nullable=True)
     vencimiento = Column(Date, nullable=True)
@@ -202,7 +214,9 @@ class Pago(Base):
         index=True,
         nullable=False,
     )
-    fecha = Column(DateTime, default=datetime.utcnow, nullable=False)
+    fecha = Column(
+        DateTime, default=datetime.utcnow, nullable=False, index=True
+    )  # 👈 index
     monto = Column(Numeric(12, 2), nullable=False)
     metodo = Column(SAEnum(MetodoPagoEnum, name="metodo_pago_enum"), nullable=False)
     referencia = Column(String(80), nullable=True)  # nro de transferencia, etc.
@@ -211,6 +225,7 @@ class Pago(Base):
         SAEnum(EstadoPagoEnum, name="estado_pago_enum"),
         nullable=False,
         default=EstadoPagoEnum.registrado.value,
+        index=True,  # 👈 filtrar por estado
     )
     creado_en = Column(DateTime, default=datetime.utcnow, nullable=False)
 
