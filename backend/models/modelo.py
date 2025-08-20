@@ -12,7 +12,7 @@ from sqlalchemy import (
     Numeric,
     Text,
     Enum as SAEnum,
-    UniqueConstraint,  # 👈 para la unicidad de factura por período
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -88,10 +88,18 @@ class Cliente(Base):
     apellido = Column(String(80), nullable=False)
     documento = Column(String(11), unique=True, index=True, nullable=False)
     telefono = Column(String(20), nullable=True)  # +549...
-    email = Column(
-        String(120), unique=True, index=True, nullable=True
-    )  # 👈 ahora unique+index
+    email = Column(String(120), unique=True, index=True, nullable=True)
     direccion = Column(String(200), nullable=False)
+
+    # 👇 NUEVO: vínculo 1:1 con Usuario para ownership
+    usuario_id = Column(
+        Integer,
+        ForeignKey("usuario.id", ondelete="SET NULL"),
+        unique=True,
+        index=True,
+        nullable=True,
+    )
+
     estado = Column(
         SAEnum(EstadoClienteEnum, name="estado_cliente_enum"),
         nullable=False,
@@ -99,6 +107,8 @@ class Cliente(Base):
     )
     creado_en = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+    # Relaciones
+    usuario = relationship("Usuario", backref="cliente", uselist=False)
     contratos = relationship("Contrato", back_populates="cliente")
 
 
