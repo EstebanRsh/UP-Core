@@ -9,10 +9,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy import asc, func
 
 from configs.db import get_db
-from auth.roles import require_roles
+from auth.roles import require_roles, require_owner_or_roles
 from models.modelo import (
     Pago as PagoModel,
     Factura as FacturaModel,
+    Contrato as ContratoModel,
     EstadoPagoEnum,
     MetodoPagoEnum,
     EstadoFacturaEnum,
@@ -57,6 +58,34 @@ def _recalcular_estado_factura(db: Session, factura: FacturaModel):
 @Pago.get("/pagos/hello")
 def hello_pagos():
     return "Hello Pagos!!!"
+
+
+@Pago.get("/mi/pagos")
+def mis_pagos(req: Request, db: Session = Depends(get_db)):
+    guard, cliente_id = require_owner_or_roles(req.headers, db, allowed_roles=None)
+    if guard:
+        return guard
+    rows: List[PagoModel] = (
+        db.query(PagoModel)
+        .join(FacturaModel, PagoModel.factura_id == FacturaModel.id)
+        .join(ContratoModel, FacturaModel.contrato_id == ContratoModel.id)
+        .filter(ContratoModel.cliente_id == cliente_id)
+        .order_by(asc(PagoModel.id))
+        .all()
+    )
+    out = [
+        {
+            "id": p.id,
+            "factura_id": p.factura_id,
+            "fecha": p.fecha.isoformat() if p.fecha else None,
+            "monto": _float(p.monto),
+            "metodo": p.metodo,
+            "estado": p.estado,
+            "referencia": p.referencia,
+        }
+        for p in rows
+    ]
+    return JSONResponse(status_code=200, content=out)
 
 
 @Pago.post("/pagos")

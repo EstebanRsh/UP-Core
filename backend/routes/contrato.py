@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import asc
 
 from configs.db import get_db
-from auth.roles import require_roles
+from auth.roles import require_roles, require_owner_or_roles
 from models.modelo import (
     Contrato as ContratoModel,
     Cliente as ClienteModel,
@@ -50,6 +50,33 @@ def _ensure_exists(db: Session, model, id_: int, nombre: str):
 @Contrato.get("/contratos/hello")
 def hello_contratos():
     return "Hello Contratos!!!"
+
+
+@Contrato.get("/mi/contratos")
+def mis_contratos(req: Request, db: Session = Depends(get_db)):
+    guard, cliente_id = require_owner_or_roles(req.headers, db, allowed_roles=None)
+    if guard:
+        return guard
+    rows: List[ContratoModel] = (
+        db.query(ContratoModel)
+        .filter(ContratoModel.cliente_id == cliente_id)
+        .order_by(asc(ContratoModel.id))
+        .all()
+    )
+    salida = [
+        {
+            "id": c.id,
+            "cliente_id": c.cliente_id,
+            "plan_id": c.plan_id,
+            "direccion_instalacion": c.direccion_instalacion,
+            "fecha_alta": str(c.fecha_alta) if c.fecha_alta else None,
+            "fecha_baja": str(c.fecha_baja) if c.fecha_baja else None,
+            "fecha_suspension": str(c.fecha_suspension) if c.fecha_suspension else None,
+            "estado": c.estado,
+        }
+        for c in rows
+    ]
+    return JSONResponse(status_code=200, content=salida)
 
 
 @Contrato.post("/contratos")

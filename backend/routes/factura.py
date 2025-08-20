@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import asc
 
 from configs.db import get_db
-from auth.roles import require_roles
+from auth.roles import require_roles, require_owner_or_roles
 from models.modelo import (
     Factura as FacturaModel,
     Contrato as ContratoModel,
@@ -63,6 +63,37 @@ def _float(n):
 @Factura.get("/facturas/hello")
 def hello_facturas():
     return "Hello Facturas!!!"
+
+
+@Factura.get("/mi/facturas")
+def mis_facturas(req: Request, db: Session = Depends(get_db)):
+    guard, cliente_id = require_owner_or_roles(req.headers, db, allowed_roles=None)
+    if guard:
+        return guard
+    rows: List[FacturaModel] = (
+        db.query(FacturaModel)
+        .join(ContratoModel, FacturaModel.contrato_id == ContratoModel.id)
+        .filter(ContratoModel.cliente_id == cliente_id)
+        .order_by(asc(FacturaModel.id))
+        .all()
+    )
+    out = [
+        {
+            "id": f.id,
+            "nro": f.nro,
+            "contrato_id": f.contrato_id,
+            "periodo_mes": f.periodo_mes,
+            "periodo_anio": f.periodo_anio,
+            "subtotal": _float(f.subtotal),
+            "mora": _float(f.mora),
+            "recargo": _float(f.recargo),
+            "total": _float(f.total),
+            "estado": f.estado,
+            "vencimiento": str(f.vencimiento) if f.vencimiento else None,
+        }
+        for f in rows
+    ]
+    return JSONResponse(status_code=200, content=out)
 
 
 @Factura.post("/facturas")

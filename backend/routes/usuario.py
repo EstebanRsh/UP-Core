@@ -6,7 +6,7 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
 from configs.db import get_db
-from models.modelo import Usuario as UsuarioModel, RoleEnum
+from models.modelo import Usuario as UsuarioModel, RoleEnum, Cliente as ClienteModel
 from auth.security import Security
 from auth.roles import require_roles
 
@@ -36,6 +36,31 @@ class InputPaginatedRequest(BaseModel):
 @Usuario.get("/")
 def hello_user():
     return "Hello User!!!"
+
+
+@Usuario.get("/me")
+def me(req: Request, db: Session = Depends(get_db)):
+    payload = Security.verify_token(req.headers)
+    if not isinstance(payload, dict) or "iat" not in payload:
+        return JSONResponse(status_code=401, content=payload)
+
+    role = payload.get("role")
+    user_id = payload.get("user_id")
+    cliente_id = None
+
+    if role == "cliente" and user_id:
+        cli = db.query(ClienteModel).filter(ClienteModel.usuario_id == user_id).first()
+        cliente_id = cli.id if cli else None
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "user_id": user_id,
+            "username": payload.get("username"),
+            "role": role,
+            "cliente_id": cliente_id,
+        },
+    )
 
 
 @Usuario.get("/users/all")
