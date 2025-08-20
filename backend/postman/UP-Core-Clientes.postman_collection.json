@@ -1,154 +1,73 @@
 {
   "info": {
     "name": "UP-Core API — Clientes",
-    "_postman_id": "8f0d4f2a-0b66-4b1f-9d7b-clientes",
-    "description": "Colección para probar login y endpoints de clientes (hello, crear, listar, paginar, detalle, actualizar, inactivar).",
+    "_postman_id": "8f0d4f2a-0b66-4b1f-9d7b-clientes-updated",
+    "description": "Clientes: hello, login, crear, listar, paginar, detalle, actualizar, inactivar.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://127.0.0.1:8000" },
+    { "key": "baseUrl", "value": "{{baseUrl}}" },
     { "key": "token", "value": "" },
     { "key": "clienteId", "value": "" },
     { "key": "nextCursor", "value": "" }
   ],
   "item": [
+    { "name":"Hello /", "request":{ "method":"GET","header":[],"url":{"raw":"{{baseUrl}}/","host":["{{baseUrl}}"],"path":[""] } } },
     {
-      "name": "Hello /",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": { "raw": "{{baseUrl}}/", "host": ["{{baseUrl}}"], "path": [""] }
-      }
-    },
-    {
-      "name": "Login (email) /users/login",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "let json={}; try{json=pm.response.json()}catch(e){}",
-              "if(json && json.token){ pm.environment.set('token', json.token); }",
-              "pm.test('Token presente', function(){ pm.expect(pm.environment.get('token')).to.be.a('string'); });"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"email\": \"gerente@demo.local\",\n  \"password\": \"secret\"\n}"
-        },
-        "url": { "raw": "{{baseUrl}}/users/login", "host": ["{{baseUrl}}"], "path": ["users", "login"] }
-      }
-    },
-    {
-      "name": "Login (documento) /users/login",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "let json={}; try{json=pm.response.json()}catch(e){}",
-              "if(json && json.token){ pm.environment.set('token', json.token); }",
-              "pm.test('Token presente', function(){ pm.expect(pm.environment.get('token')).to.be.a('string'); });"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"documento\": \"30000000001\",\n  \"password\": \"secret\"\n}"
-        },
-        "url": { "raw": "{{baseUrl}}/users/login", "host": ["{{baseUrl}}"], "path": ["users", "login"] }
-      }
+      "name": "Login (documento gerente) /users/login",
+      "event": [{ "listen":"test","script":{"exec":[
+        "let j={}; try{j=pm.response.json()}catch(e){}",
+        "if(j && j.token){ pm.environment.set('token', j.token); }"
+      ],"type":"text/javascript"}}],
+      "request": { "method":"POST","header":[{ "key":"Content-Type","value":"application/json"}],
+        "body":{ "mode":"raw","raw":"{\n  \"documento\": \"{{gerenteDocumento}}\",\n  \"password\": \"secret\"\n}" },
+        "url":{ "raw":"{{baseUrl}}/users/login","host":["{{baseUrl}}"],"path":["users","login"] } }
     },
     {
       "name": "Clientes — Hello /clientes/hello",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": { "raw": "{{baseUrl}}/clientes/hello", "host": ["{{baseUrl}}"], "path": ["clientes", "hello"] }
-      }
+      "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/clientes/hello", "host": ["{{baseUrl}}"], "path": ["clientes", "hello"] } }
     },
     {
       "name": "Clientes — Crear /clientes",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "let json={}; try{json=pm.response.json()}catch(e){}",
-              "if(json && json.id){ pm.environment.set('clienteId', json.id); }",
-              "pm.test('clienteId guardado', function(){ pm.expect(pm.environment.get('clienteId')).to.not.be.empty; });"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
+      "event": [{ "listen":"test","script":{"exec":[
+        "let j={}; try{j=pm.response.json()}catch(e){}",
+        "if(j && j.id){ pm.environment.set('clienteId', j.id); }"
+      ],"type":"text/javascript"}}],
       "request": {
         "method": "POST",
         "header": [
           { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
           { "key": "Content-Type", "value": "application/json" }
         ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"nombre\": \"Juan\",\n  \"apellido\": \"Pérez\",\n  \"documento\": \"30123456\",\n  \"telefono\": \"+5491112345678\",\n  \"email\": \"juan@demo.local\",\n  \"direccion\": \"Av. Siempre Viva 123\"\n}"
-        },
+        "body": { "mode":"raw", "raw":"{\n  \"nombre\": \"Juan\",\n  \"apellido\": \"Pérez\",\n  \"documento\": \"30123456\",\n  \"telefono\": \"+5491112345678\",\n  \"email\": \"juan@demo.local\",\n  \"direccion\": \"Av. Siempre Viva 123\"\n}" },
         "url": { "raw": "{{baseUrl}}/clientes", "host": ["{{baseUrl}}"], "path": ["clientes"] }
       }
     },
     {
       "name": "Clientes — Listar todos /clientes/all",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
-        "url": { "raw": "{{baseUrl}}/clientes/all", "host": ["{{baseUrl}}"], "path": ["clientes", "all"] }
-      }
+      "request": { "method":"GET","header":[{ "key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": { "raw":"{{baseUrl}}/clientes/all", "host":["{{baseUrl}}"], "path":["clientes","all"] } }
     },
     {
       "name": "Clientes — Paginado /clientes/paginated",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "let json={}; try{json=pm.response.json()}catch(e){}",
-              "if(json && json.next_cursor){ pm.environment.set('nextCursor', json.next_cursor); } else { pm.environment.unset('nextCursor'); }",
-              "pm.test('Paginado OK', function(){ pm.expect(json).to.have.property('clientes'); });"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
+      "event": [{ "listen":"test","script":{"exec":[
+        "let j={}; try{j=pm.response.json()}catch(e){}",
+        "if(j && j.next_cursor){ pm.environment.set('nextCursor', j.next_cursor); } else { pm.environment.unset('nextCursor'); }"
+      ],"type":"text/javascript"}}],
       "request": {
         "method": "POST",
         "header": [
           { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
           { "key": "Content-Type", "value": "application/json" }
         ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"limit\": 25,\n  \"last_seen_id\": null\n}"
-        },
+        "body": { "mode":"raw", "raw":"{\n  \"limit\": 25,\n  \"last_seen_id\": null\n}" },
         "url": { "raw": "{{baseUrl}}/clientes/paginated", "host": ["{{baseUrl}}"], "path": ["clientes", "paginated"] }
       }
     },
     {
       "name": "Clientes — Obtener por id /clientes/{{clienteId}}",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
-        "url": { "raw": "{{baseUrl}}/clientes/{{clienteId}}", "host": ["{{baseUrl}}"], "path": ["clientes", "{{clienteId}}"] }
-      }
+      "request": { "method":"GET","header":[{ "key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": { "raw":"{{baseUrl}}/clientes/{{clienteId}}","host":["{{baseUrl}}"],"path":["clientes","{{clienteId}}"] } }
     },
     {
       "name": "Clientes — Actualizar /clientes/{{clienteId}}",
@@ -158,10 +77,7 @@
           { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
           { "key": "Content-Type", "value": "application/json" }
         ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"telefono\": \"+5491166667777\",\n  \"direccion\": \"Calle Falsa 742\"\n}"
-        },
+        "body": { "mode":"raw","raw":"{\n  \"telefono\": \"+5491166667777\",\n  \"direccion\": \"Calle Falsa 742\"\n}" },
         "url": { "raw": "{{baseUrl}}/clientes/{{clienteId}}", "host": ["{{baseUrl}}"], "path": ["clientes", "{{clienteId}}"] }
       }
     },

@@ -1,136 +1,99 @@
 {
   "info": {
     "name": "UP-Core API — Contratos",
-    "_postman_id": "d2d0c4a1-contratos",
-    "description": "Probar login y endpoints de contratos: hello, crear, listar, paginar, detalle, actualizar, activar, suspender, baja.",
+    "_postman_id": "d2d0c4a1-contratos-updated",
+    "description": "Contratos: hello, login, crear, listar, paginar, detalle, actualizar, activar, suspender, baja, y /mi/contratos (ownership).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://127.0.0.1:8000" },
-    { "key": "token", "value": "" },
-    { "key": "clienteId", "value": "1" },
-    { "key": "planId", "value": "1" },
-    { "key": "contratoId", "value": "" },
-    { "key": "nextCursor", "value": "" }
+    { "key":"baseUrl","value":"{{baseUrl}}" },
+    { "key":"token","value":"" },
+    { "key":"clienteId","value":"1" },
+    { "key":"planId","value":"1" },
+    { "key":"contratoId","value":"" },
+    { "key":"nextCursor","value":"" }
   ],
   "item": [
     {
-      "name": "Login /users/login",
-      "event": [{
-        "listen": "test",
-        "script": {
-          "exec": [
-            "let j={}; try{j=pm.response.json()}catch(e){}",
-            "if(j && j.token){ pm.environment.set('token', j.token); }"
-          ],
-          "type": "text/javascript"
-        }
-      }],
+      "name": "Login (documento gerente) /users/login",
+      "event": [{ "listen":"test","script":{"exec":[
+        "let j={}; try{j=pm.response.json()}catch(e){}",
+        "if(j && j.token){ pm.environment.set('token', j.token); }"
+      ],"type":"text/javascript"}}],
       "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": { "mode": "raw", "raw": "{\n  \"email\": \"gerente@demo.local\",\n  \"password\": \"secret\"\n}" },
-        "url": { "raw": "{{baseUrl}}/users/login", "host": ["{{baseUrl}}"], "path": ["users","login"] }
+        "method":"POST",
+        "header":[{ "key":"Content-Type","value":"application/json"}],
+        "body":{ "mode":"raw","raw":"{\n  \"documento\": \"{{gerenteDocumento}}\",\n  \"password\": \"secret\"\n}" },
+        "url":{ "raw":"{{baseUrl}}/users/login","host":["{{baseUrl}}"],"path":["users","login"] }
       }
     },
-    {
-      "name": "Contratos — Hello /contratos/hello",
-      "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/contratos/hello", "host": ["{{baseUrl}}"], "path": ["contratos","hello"] } }
-    },
+    { "name":"Contratos — Hello /contratos/hello","request":{ "method":"GET","header":[],"url":{"raw":"{{baseUrl}}/contratos/hello","host":["{{baseUrl}}"],"path":["contratos","hello"] } } },
     {
       "name": "Contratos — Crear /contratos",
-      "event": [{
-        "listen": "test",
-        "script": {
-          "exec": [
-            "let j={}; try{j=pm.response.json()}catch(e){}",
-            "if(j && j.id){ pm.environment.set('contratoId', j.id); }"
-          ],
-          "type": "text/javascript"
-        }
-      }],
+      "event": [{ "listen":"test","script":{"exec":[
+        "let j={}; try{j=pm.response.json()}catch(e){}",
+        "if(j && j.id){ pm.environment.set('contratoId', j.id); }"
+      ],"type":"text/javascript"}}],
       "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-          { "key": "Content-Type", "value": "application/json" }
+        "method":"POST",
+        "header":[
+          { "key":"Authorization","value":"Bearer {{token}}","type":"text" },
+          { "key":"Content-Type","value":"application/json" }
         ],
-        "body": { "mode": "raw", "raw": "{\n  \"cliente_id\": {{clienteId}},\n  \"plan_id\": {{planId}},\n  \"direccion_instalacion\": \"Av. Internet 123\"\n}" },
-        "url": { "raw": "{{baseUrl}}/contratos", "host": ["{{baseUrl}}"], "path": ["contratos"] }
+        "body":{ "mode":"raw","raw":"{\n  \"cliente_id\": {{clienteId}},\n  \"plan_id\": {{planId}},\n  \"direccion_instalacion\": \"Av. Internet 123\"\n}" },
+        "url":{ "raw":"{{baseUrl}}/contratos","host":["{{baseUrl}}"],"path":["contratos"] }
       }
     },
     {
       "name": "Contratos — Listar /contratos/all",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
-        "url": { "raw": "{{baseUrl}}/contratos/all", "host": ["{{baseUrl}}"], "path": ["contratos","all"] }
-      }
+      "request": { "method":"GET","header":[{ "key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": { "raw":"{{baseUrl}}/contratos/all","host":["{{baseUrl}}"],"path":["contratos","all"] } }
     },
     {
       "name": "Contratos — Paginado /contratos/paginated",
-      "event": [{
-        "listen": "test",
-        "script": {
-          "exec": [
-            "let j={}; try{j=pm.response.json()}catch(e){}",
-            "if(j && j.next_cursor){ pm.environment.set('nextCursor', j.next_cursor); } else { pm.environment.unset('nextCursor'); }"
-          ],
-          "type": "text/javascript"
-        }
-      }],
+      "event": [{ "listen":"test","script":{"exec":[
+        "let j={}; try{j=pm.response.json()}catch(e){}",
+        "if(j && j.next_cursor){ pm.environment.set('nextCursor', j.next_cursor); } else { pm.environment.unset('nextCursor'); }"
+      ],"type":"text/javascript"}}],
       "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-          { "key": "Content-Type", "value": "application/json" }
+        "method":"POST",
+        "header":[
+          { "key":"Authorization","value":"Bearer {{token}}","type":"text" },
+          { "key":"Content-Type","value":"application/json" }
         ],
-        "body": { "mode": "raw", "raw": "{\n  \"limit\": 25,\n  \"last_seen_id\": null\n}" },
-        "url": { "raw": "{{baseUrl}}/contratos/paginated", "host": ["{{baseUrl}}"], "path": ["contratos","paginated"] }
+        "body":{ "mode":"raw","raw":"{\n  \"limit\": 25,\n  \"last_seen_id\": null\n}" },
+        "url":{ "raw":"{{baseUrl}}/contratos/paginated","host":["{{baseUrl}}"],"path":["contratos","paginated"] }
       }
     },
     {
       "name": "Contratos — Obtener /contratos/{{contratoId}}",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
-        "url": { "raw": "{{baseUrl}}/contratos/{{contratoId}}", "host": ["{{baseUrl}}"], "path": ["contratos","{{contratoId}}"] }
-      }
+      "request": { "method":"GET","header":[{ "key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": { "raw":"{{baseUrl}}/contratos/{{contratoId}}","host":["{{baseUrl}}"],"path":["contratos","{{contratoId}}"] } }
     },
     {
       "name": "Contratos — Actualizar /contratos/{{contratoId}}",
       "request": {
-        "method": "PUT",
-        "header": [
-          { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-          { "key": "Content-Type", "value": "application/json" }
+        "method":"PUT",
+        "header":[
+          { "key":"Authorization","value":"Bearer {{token}}","type":"text" },
+          { "key":"Content-Type","value":"application/json" }
         ],
-        "body": { "mode": "raw", "raw": "{\n  \"direccion_instalacion\": \"Calle Fibra 456\"\n}" },
-        "url": { "raw": "{{baseUrl}}/contratos/{{contratoId}}", "host": ["{{baseUrl}}"], "path": ["contratos","{{contratoId}}"] }
+        "body":{ "mode":"raw","raw":"{\n  \"direccion_instalacion\": \"Calle Fibra 456\"\n}" },
+        "url":{ "raw":"{{baseUrl}}/contratos/{{contratoId}}","host":["{{baseUrl}}"],"path":["contratos","{{contratoId}}"] }
       }
     },
-    {
-      "name": "Contratos — Activar /contratos/{{contratoId}}/activar",
+    { "name":"Contratos — Activar /contratos/{{contratoId}}/activar", "request":{ "method":"POST","header":[{ "key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+      "url":{ "raw":"{{baseUrl}}/contratos/{{contratoId}}/activar","host":["{{baseUrl}}"],"path":["contratos","{{contratoId}}","activar"] } } },
+    { "name":"Contratos — Suspender /contratos/{{contratoId}}/suspender", "request":{ "method":"POST","header":[{ "key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+      "url":{ "raw":"{{baseUrl}}/contratos/{{contratoId}}/suspender","host":["{{baseUrl}}"],"path":["contratos","{{contratoId}}","suspender"] } } },
+    { "name":"Contratos — Baja /contratos/{{contratoId}}/baja", "request":{ "method":"POST","header":[{ "key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+      "url":{ "raw":"{{baseUrl}}/contratos/{{contratoId}}/baja","host":["{{baseUrl}}"],"path":["contratos","{{contratoId}}","baja"] } } },
+
+    { "name":"Mis contratos (cliente) /mi/contratos",
       "request": {
-        "method": "POST",
-        "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
-        "url": { "raw": "{{baseUrl}}/contratos/{{contratoId}}/activar", "host": ["{{baseUrl}}"], "path": ["contratos","{{contratoId}}","activar"] }
-      }
-    },
-    {
-      "name": "Contratos — Suspender /contratos/{{contratoId}}/suspender",
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
-        "url": { "raw": "{{baseUrl}}/contratos/{{contratoId}}/suspender", "host": ["{{baseUrl}}"], "path": ["contratos","{{contratoId}}","suspender"] }
-      }
-    },
-    {
-      "name": "Contratos — Baja /contratos/{{contratoId}}/baja",
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
-        "url": { "raw": "{{baseUrl}}/contratos/{{contratoId}}/baja", "host": ["{{baseUrl}}"], "path": ["contratos","{{contratoId}}","baja"] }
+        "method":"GET",
+        "header":[{ "key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url":{ "raw":"{{baseUrl}}/mi/contratos","host":["{{baseUrl}}"],"path":["mi","contratos"] }
       }
     }
   ]
