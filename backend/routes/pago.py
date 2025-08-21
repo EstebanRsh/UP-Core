@@ -1,3 +1,4 @@
+# backend/routes/pago.py
 from datetime import datetime
 from typing import Optional, List
 import os, uuid, shutil, re, unicodedata
@@ -32,7 +33,7 @@ try:
 except Exception:
     WEASY_OK = False
 
-Pago = APIRouter()
+Pago = APIRouter(tags=["Pagos"])
 
 
 # ===============================
@@ -75,7 +76,6 @@ def _comprobante_dir() -> Path:
 
 
 def _slugify(texto: str) -> str:
-    # sin acentos, minúsculas, solo [a-z0-9_-], espacios -> _
     nfkd = unicodedata.normalize("NFKD", texto)
     s = "".join([c for c in nfkd if not unicodedata.combining(c)])
     s = s.lower().replace(" ", "_")
@@ -135,9 +135,8 @@ def _get_company_config(db: Session) -> dict:
             "company_address": cfg.company_address,
             "company_dni": cfg.company_dni,
             "company_contact": cfg.company_contact,
-            "logo_path": cfg.logo_path,  # p.ej. "logo.png" si existe en assets/pdf/
+            "logo_path": cfg.logo_path,
         }
-    # fallback si no hay registro
     return {
         "company_name": "UP-Core ISP",
         "company_address": "Av. Principal 123, Buenos Aires",
@@ -201,12 +200,20 @@ def _render_recibo_weasy(
 # ===============================
 # Rutas
 # ===============================
-@Pago.get("/pagos/hello")
+@Pago.get(
+    "/pagos/hello",
+    summary="Probar módulo Pagos",
+    description="Endpoint de prueba para verificar que el router de pagos responde.",
+)
 def hello_pagos():
     return "Hello Pagos!!!"
 
 
-@Pago.post("/pagos")
+@Pago.post(
+    "/pagos",
+    summary="Registrar pago",
+    description="Crea un pago, recalcula estado de la factura y opcionalmente genera el recibo PDF.",
+)
 def crear_pago(req: Request, body: InputPagoCreate, db: Session = Depends(get_db)):
     guard = require_roles(req.headers, {"gerente", "operador"})
     if guard:
@@ -239,7 +246,6 @@ def crear_pago(req: Request, body: InputPagoCreate, db: Session = Depends(get_db
         db.commit()
         db.refresh(f)
 
-        # Autogenerar recibo si se pide
         if body.generar_recibo and WEASY_OK:
             c = db.get(ContratoModel, f.contrato_id)
             cli = db.get(ClienteModel, c.cliente_id) if c else None
@@ -247,7 +253,6 @@ def crear_pago(req: Request, body: InputPagoCreate, db: Session = Depends(get_db
                 destino = _recibo_path_for(nuevo, f, cli)
                 company = _get_company_config(db)
                 _render_recibo_weasy(destino, nuevo, f, c, cli, company)
-                # persistimos el path del recibo
                 nuevo.recibo_path = str(destino.relative_to(_storage_root()))
                 db.commit()
                 db.refresh(nuevo)
@@ -270,7 +275,11 @@ def crear_pago(req: Request, body: InputPagoCreate, db: Session = Depends(get_db
         return JSONResponse(status_code=500, content={"message": "Error al crear pago"})
 
 
-@Pago.get("/pagos/factura/{factura_id}")
+@Pago.get(
+    "/pagos/factura/{factura_id}",
+    summary="Listar pagos de una factura (admin)",
+    description="Devuelve los pagos asociados a una factura. Requiere rol gerente u operador.",
+)
 def pagos_por_factura(factura_id: int, req: Request, db: Session = Depends(get_db)):
     guard = require_roles(req.headers, {"gerente", "operador"})
     if guard:
@@ -303,7 +312,11 @@ def pagos_por_factura(factura_id: int, req: Request, db: Session = Depends(get_d
         )
 
 
-@Pago.get("/pagos/all")
+@Pago.get(
+    "/pagos/all",
+    summary="Listar todos los pagos (admin)",
+    description="Lista completa de pagos para administración. Requiere rol gerente u operador.",
+)
 def listar_pagos(req: Request, db: Session = Depends(get_db)):
     guard = require_roles(req.headers, {"gerente", "operador"})
     if guard:
@@ -329,7 +342,11 @@ def listar_pagos(req: Request, db: Session = Depends(get_db)):
         )
 
 
-@Pago.post("/pagos/paginated")
+@Pago.post(
+    "/pagos/paginated",
+    summary="Listar pagos paginados (admin)",
+    description="Devuelve pagos paginados por id ascendente. Requiere rol gerente u operador.",
+)
 def pagos_paginados(
     req: Request, body: InputPaginatedRequest, db: Session = Depends(get_db)
 ):
@@ -370,7 +387,11 @@ ALLOWED_MIMES = {"application/pdf", "image/jpeg", "image/png"}
 ALLOWED_EXTS = {"pdf", "jpg", "jpeg", "png"}
 
 
-@Pago.post("/pagos/{pago_id}/comprobante")
+@Pago.post(
+    "/pagos/{pago_id}/comprobante",
+    summary="Subir comprobante de pago",
+    description="Adjunta un comprobante (PDF/JPG/PNG). Disponible para gerente/operador y cliente dueño.",
+)
 async def subir_comprobante(
     pago_id: int,
     req: Request,
@@ -439,7 +460,11 @@ async def subir_comprobante(
         )
 
 
-@Pago.get("/pagos/{pago_id}/comprobante")
+@Pago.get(
+    "/pagos/{pago_id}/comprobante",
+    summary="Descargar comprobante de pago",
+    description="Devuelve el comprobante si existe y el usuario tiene permiso.",
+)
 def descargar_comprobante(pago_id: int, req: Request, db: Session = Depends(get_db)):
     guard, cliente_id = require_owner_or_roles(
         req.headers, db, allowed_roles={"gerente", "operador"}
@@ -497,7 +522,11 @@ def descargar_comprobante(pago_id: int, req: Request, db: Session = Depends(get_
 # ===============================
 # Recibo PDF: generar y descargar
 # ===============================
-@Pago.post("/pagos/{pago_id}/recibo")
+@Pago.post(
+    "/pagos/{pago_id}/recibo",
+    summary="Generar recibo PDF",
+    description="Genera el PDF del recibo con la plantilla HTML/CSS y persiste el path en BD.",
+)
 def generar_recibo(pago_id: int, req: Request, db: Session = Depends(get_db)):
     guard, cliente_id = require_owner_or_roles(
         req.headers, db, allowed_roles={"gerente", "operador"}
@@ -526,7 +555,6 @@ def generar_recibo(pago_id: int, req: Request, db: Session = Depends(get_db)):
                 status_code=404, content={"message": "Datos incompletos"}
             )
 
-        # Ownership si es cliente
         if cliente_id is not None and c.cliente_id != cliente_id:
             return JSONResponse(
                 status_code=404, content={"message": "Pago no encontrado"}
@@ -536,7 +564,6 @@ def generar_recibo(pago_id: int, req: Request, db: Session = Depends(get_db)):
         company = _get_company_config(db)
         _render_recibo_weasy(destino, p, f, c, cli, company)
 
-        # Persistimos el path (por si se generó desde aquí)
         p.recibo_path = str(destino.relative_to(_storage_root()))
         db.commit()
         db.refresh(p)
@@ -555,7 +582,11 @@ def generar_recibo(pago_id: int, req: Request, db: Session = Depends(get_db)):
         )
 
 
-@Pago.get("/pagos/{pago_id}/recibo")
+@Pago.get(
+    "/pagos/{pago_id}/recibo",
+    summary="Descargar recibo PDF",
+    description="Descarga el PDF del recibo si existe y el usuario tiene permiso.",
+)
 def descargar_recibo(pago_id: int, req: Request, db: Session = Depends(get_db)):
     guard, cliente_id = require_owner_or_roles(
         req.headers, db, allowed_roles={"gerente", "operador"}
@@ -581,7 +612,6 @@ def descargar_recibo(pago_id: int, req: Request, db: Session = Depends(get_db)):
                 status_code=404, content={"message": "Recibo no encontrado"}
             )
 
-        # Preferimos el path persistido; si no, intentamos reconstruir
         if p.recibo_path:
             file_path = _storage_root() / p.recibo_path
         else:

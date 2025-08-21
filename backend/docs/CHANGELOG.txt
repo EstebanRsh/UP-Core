@@ -1,0 +1,53 @@
+# CHANGELOG.txt
+UP-Core — Historial de Cambios (MVP)
+====================================
+
+v0.7 — 2025-08-21
+-----------------
+- Documentación ampliada:
+  - README.txt completo
+  - BACKEND_API_DOCS.txt (referencia endpoints)
+  - Colecciones Postman actualizadas y nueva colección Configuración
+  - Summary/Description y Tags en todos los endpoints para Swagger
+- Rutas de configuración de empresa (GET/PUT /config/facturacion)
+- Mejoras en ownership (descarga/subida comprobante/recibo)
+
+v0.6 — 2025-08-20
+-----------------
+- Recibos PDF (WeasyPrint + Jinja2) solo para pagos (no facturas PDF)
+- Plantillas en `assets/pdf/receipt.html` y `style.css`
+- Estructura de storage diaria `storage/recibos/AAAA/MM/DD/`
+- Nomenclatura: `rec_{DDMMAAAA}_{apellido}_{nombre}_per-{MMAAAA}_p{pagoId}.pdf`
+- Persistencia de `pago.recibo_path` en BD
+
+v0.5 — 2025-08-18
+-----------------
+- Endpoints de Pagos:
+  - crear/paginar/listar/por factura
+  - subir/descargar comprobante (PDF/JPG/PNG)
+  - generar/descargar recibo
+- Recalculo automático de estado de factura al registrar pago
+
+v0.4 — 2025-08-16
+-----------------
+- Endpoints de Facturas (CRUD administrativo + emitir + /mi/facturas)
+- Único por (contrato_id, periodo_mes, periodo_anio)
+- Validación de totales y vencimientos
+
+v0.3 — 2025-08-14
+-----------------
+- Endpoints de Contratos (CRUD + activar/suspender/baja + /mi/contratos)
+- Validaciones de estado y plan activo
+
+v0.2 — 2025-08-12
+-----------------
+- Endpoints de Planes (CRUD, paginación)
+- Endpoints de Clientes (CRUD, paginación)
+- Normalización de documento y validación de duplicados
+
+v0.1 — 2025-08-10
+-----------------
+- Estructura base (FastAPI + SQLAlchemy + PostgreSQL)
+- Modelos: Usuario, Cliente, Plan, Contrato, Factura, Pago, ConfigFacturacion
+- Seguridad JWT y guards por rol/ownership
+- Colecciones Postman iniciales y seeds SQL

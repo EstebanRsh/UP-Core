@@ -1,0 +1,169 @@
+# BACKEND_API_DOCS.txt
+UP-Core — Referencia de API (MVP)
+=================================
+
+Convenciones
+------------
+- Base URL (local): http://127.0.0.1:8000
+- Formato: JSON (UTF-8)
+- Fechas: ISO 8601 (YYYY-MM-DD y YYYY-MM-DDTHH:mm:ss)
+- Zona horaria: America/Argentina/Buenos_Aires
+- Autenticación: JWT en header `Authorization: Bearer <token>`
+- Paginación (cursor por id): POST .../paginated con body:
+  {
+    "limit": 25,                # 1..100
+    "last_seen_id": 123         # opcional
+  }
+- Códigos comunes: 200/201 OK; 401/403 Auth/Permisos; 404 No encontrado; 409 Conflicto; 422 Datos inválidos; 500 Error
+
+Roles y permisos
+----------------
+- gerente: acceso completo administrativo
+- operador: acceso administrativo estándar
+- cliente: acceso restringido a sus propios recursos (ownership)
+- Validadores:
+  - `require_roles(headers, {"gerente","operador"})`
+  - `require_owner_or_roles(headers, db, allowed_roles={...})`
+
+Enumeraciones (resumen)
+-----------------------
+- RoleEnum: gerente | operador | cliente
+- EstadoClienteEnum: activo | inactivo
+- EstadoContratoEnum: borrador | activo | suspendido | baja
+- EstadoFacturaEnum: borrador | emitida | vencida | pagada
+- EstadoPagoEnum: registrado | confirmado | anulado
+- MetodoPagoEnum: efectivo | transferencia
+
+Autenticación / Usuarios
+------------------------
+POST /users/login
+- Body (uno de los siguientes):
+  { "documento": "30000000001", "password": "secret" }
+  { "email": "operador@demo.local", "password": "secret" }
+- 200:
+  {
+    "status":"success",
+    "token":"<jwt>",
+    "user":{"id":1,"email":"...","documento":"...","role":"operador","activo":true}
+  }
+- 401 credenciales inválidas | 404 usuario no encontrado
+
+GET /me
+- 200: { "user_id": 1, "username": "...", "role": "cliente|operador|gerente", "cliente_id": 123|null }
+
+GET /users/all (admin)
+POST /users/paginated (admin)
+POST /users/add (solo gerente)
+
+Clientes
+--------
+POST /clientes (admin)
+- Body:
+  {
+    "nombre":"Juan","apellido":"Pérez","documento":"30111222",
+    "telefono":"+54911...","email":"juan@...","direccion":"..."
+  }
+- 201: {...cliente...}
+- 409: documento/email duplicado
+
+GET /clientes/all (admin)
+POST /clientes/paginated (admin)
+GET /clientes/{id} (admin)
+PUT /clientes/{id} (admin)
+DELETE /clientes/{id}  → baja lógica (estado=inactivo)
+
+Planes
+------
+POST /planes (admin)            # crea plan con velocidades y precio
+GET /planes/all (admin)
+POST /planes/paginated (admin)
+GET /planes/{id} (admin)
+PUT /planes/{id} (admin)
+DELETE /planes/{id} (admin)     # desactiva (activo=false)
+
+Contratos
+---------
+POST /contratos (admin)
+- Body:
+  { "cliente_id": 1, "plan_id": 2, "direccion_instalacion": "Calle 123", "fecha_alta": "2025-08-01" }
+GET /contratos/all (admin)
+POST /contratos/paginated (admin)
+GET /contratos/{id} (admin)
+PUT /contratos/{id} (admin)     # direccion/estado/fechas/plan
+POST /contratos/{id}/activar (admin)
+POST /contratos/{id}/suspender (admin)
+POST /contratos/{id}/baja (admin)
+GET /mi/contratos (cliente)     # solo sus contratos
+
+Facturas (administrativas, sin PDF)
+-----------------------------------
+POST /facturas (admin)
+- Body:
+  {
+    "contrato_id":12, "periodo_mes":8, "periodo_anio":2025,
+    "mora":0, "recargo":0, "periodo_inicio":"2025-08-01", "periodo_fin":"2025-08-31"
+  }
+- 409: único por (contrato, mes, año)
+GET /facturas/all (admin)
+POST /facturas/paginated (admin)
+GET /facturas/{id} (admin)
+PUT /facturas/{id} (admin)      # mora/recargo/vencimiento/estado
+POST /facturas/{id}/emitir (admin)  # estado=emitida, setea vencimiento
+GET /contratos/{contrato_id}/facturas (admin)
+GET /mi/facturas (cliente)      # solo las suyas
+
+Pagos (con recibo PDF)
+----------------------
+POST /pagos (admin)
+- Body:
+  {
+    "factura_id":55, "monto":12000.0, "metodo":"transferencia",
+    "referencia":"TRX-ABC123", "confirmar":true, "generar_recibo":true
+  }
+- 201: {
+    "id":777,"factura_id":55,"monto":12000.0,"metodo":"transferencia",
+    "estado":"confirmado","factura_estado":"pagada|emitida|...",
+    "recibo_path":"recibos/AAAA/MM/DD/rec_21082025_perez_juan_per-082025_p777.pdf"
+  }
+
+GET /pagos/all (admin)
+POST /pagos/paginated (admin)
+GET /pagos/factura/{factura_id} (admin)
+
+Comprobante (ownership)
+- POST /pagos/{pago_id}/comprobante   # multipart/form-data → PDF/JPG/PNG
+- GET  /pagos/{pago_id}/comprobante   # descarga si existe
+
+Recibo PDF (ownership)
+- POST /pagos/{pago_id}/recibo        # genera y guarda path
+- GET  /pagos/{pago_id}/recibo        # descarga si existe
+
+Configuración (datos empresa para PDF)
+--------------------------------------
+GET /config/facturacion (admin)
+PUT /config/facturacion (solo gerente)
+- Body (parcial):
+  {
+    "company_name":"Mi ISP SRL","company_dni":"30-...",
+    "company_address":"...","company_contact":"+54 ... | ...@...",
+    "logo_path":"/ruta/logo.png"
+  }
+
+Respuestas de error (formato sugerido)
+--------------------------------------
+{ "message": "Texto descriptivo del error" }
+
+Notas de seguridad
+------------------
+- En producción, guardar `JWT_SECRET` en variables de entorno.
+- (Pendiente) Hash de contraseñas (reemplazar texto plano).
+- Validación de ownership en endpoints de descarga/subida de archivos y “/mi/*”.
+- No versionar `backend/storage/**`.
+
+Ejemplo de flujo (end-to-end)
+-----------------------------
+1) Login (gerente) → token
+2) Crear plan → crear cliente → crear contrato
+3) Crear factura (mes/año) → emitir
+4) Registrar pago con `generar_recibo=true`
+5) Descargar recibo (PDF) y/o subir comprobante

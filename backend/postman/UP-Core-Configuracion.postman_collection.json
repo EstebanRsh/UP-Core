@@ -1,0 +1,50 @@
+{
+  "info": {
+    "name": "UP-Core API — Configuración",
+    "_postman_id": "a9a0f7b1-configuracion",
+    "description": "Configuración de facturación: obtener y actualizar datos de empresa para PDFs (logo, CUIT, dirección, contacto).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key":"baseUrl","value":"{{baseUrl}}" },
+    { "key":"token","value":"" }
+  ],
+  "item": [
+    {
+      "name": "Login (documento gerente) /users/login",
+      "event": [{ "listen":"test","script":{"exec":[
+        "let j={}; try{j=pm.response.json()}catch(e){}",
+        "if(j && j.token){ pm.environment.set('token', j.token); }"
+      ],"type":"text/javascript"}}],
+      "request": {
+        "method":"POST",
+        "header":[{ "key":"Content-Type","value":"application/json"}],
+        "body":{ "mode":"raw","raw":"{\n  \"documento\": \"{{gerenteDocumento}}\",\n  \"password\": \"secret\"\n}" },
+        "url":{ "raw":"{{baseUrl}}/users/login","host":["{{baseUrl}}"],"path":["users","login"] }
+      }
+    },
+    {
+      "name": "Obtener configuración /config/facturacion",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" } ],
+        "url": { "raw": "{{baseUrl}}/config/facturacion", "host": ["{{baseUrl}}"], "path": ["config","facturacion"] }
+      }
+    },
+    {
+      "name": "Actualizar configuración /config/facturacion",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"company_name\": \"Mi ISP SRL\",\n  \"company_dni\": \"30-12345678-9\",\n  \"company_address\": \"Av. Siempre Viva 742, CABA\",\n  \"company_contact\": \"+54 11 5555-5555 | soporte@miisp.com\",\n  \"logo_path\": \"/absolute/o/relative/path/logo.png\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/config/facturacion", "host": ["{{baseUrl}}"], "path": ["config","facturacion"] }
+      }
+    }
+  ]
+}

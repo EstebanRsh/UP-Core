@@ -11,7 +11,7 @@ from configs.db import get_db
 from models.modelo import Plan as PlanModel
 from auth.roles import require_roles
 
-Plan = APIRouter()
+Plan = APIRouter(tags=["Planes"])
 
 
 class InputPlanCreate(BaseModel):
@@ -37,12 +37,20 @@ class InputPaginatedRequest(BaseModel):
     last_seen_id: Optional[int] = None
 
 
-@Plan.get("/planes/hello")
+@Plan.get(
+    "/planes/hello",
+    summary="Probar módulo Planes",
+    description="Endpoint de prueba para verificar que el router de planes responde.",
+)
 def hello_planes():
     return "Hello Planes!!!"
 
 
-@Plan.post("/planes")
+@Plan.post(
+    "/planes",
+    summary="Crear plan (admin)",
+    description="Crea un plan con velocidades y precio mensual. Requiere rol gerente u operador.",
+)
 def crear_plan(req: Request, body: InputPlanCreate, db: Session = Depends(get_db)):
     guard = require_roles(req.headers, {"gerente", "operador"})
     if guard:
@@ -81,7 +89,11 @@ def crear_plan(req: Request, body: InputPlanCreate, db: Session = Depends(get_db
         return JSONResponse(status_code=500, content={"message": "Error al crear plan"})
 
 
-@Plan.get("/planes/all")
+@Plan.get(
+    "/planes/all",
+    summary="Listar planes (admin)",
+    description="Lista todos los planes activos e inactivos para administración.",
+)
 def listar_planes(req: Request, db: Session = Depends(get_db)):
     guard = require_roles(req.headers, {"gerente", "operador"})
     if guard:
@@ -108,7 +120,11 @@ def listar_planes(req: Request, db: Session = Depends(get_db)):
         )
 
 
-@Plan.post("/planes/paginated")
+@Plan.post(
+    "/planes/paginated",
+    summary="Listar planes paginados (admin)",
+    description="Devuelve planes paginados por id ascendente. Requiere rol gerente u operador.",
+)
 def planes_paginados(
     req: Request, body: InputPaginatedRequest, db: Session = Depends(get_db)
 ):
@@ -143,7 +159,11 @@ def planes_paginados(
         )
 
 
-@Plan.get("/planes/{plan_id}")
+@Plan.get(
+    "/planes/{plan_id}",
+    summary="Detalle de plan (admin)",
+    description="Devuelve la información del plan por ID. Requiere rol gerente u operador.",
+)
 def obtener_plan(plan_id: int, req: Request, db: Session = Depends(get_db)):
     guard = require_roles(req.headers, {"gerente", "operador"})
     if guard:
@@ -173,7 +193,11 @@ def obtener_plan(plan_id: int, req: Request, db: Session = Depends(get_db)):
         )
 
 
-@Plan.put("/planes/{plan_id}")
+@Plan.put(
+    "/planes/{plan_id}",
+    summary="Actualizar plan (admin)",
+    description="Actualiza datos del plan (velocidades, precio, estado). Requiere rol gerente u operador.",
+)
 def actualizar_plan(
     plan_id: int, body: InputPlanUpdate, req: Request, db: Session = Depends(get_db)
 ):
@@ -214,7 +238,11 @@ def actualizar_plan(
         )
 
 
-@Plan.delete("/planes/{plan_id}")
+@Plan.delete(
+    "/planes/{plan_id}",
+    summary="Desactivar plan (admin)",
+    description="Marca un plan como inactivo (baja lógica). Requiere rol gerente u operador.",
+)
 def desactivar_plan(plan_id: int, req: Request, db: Session = Depends(get_db)):
     guard = require_roles(req.headers, {"gerente", "operador"})
     if guard:

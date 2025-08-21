@@ -1,4 +1,4 @@
-# routes/usuario.py
+# backend/routes/usuario.py
 from typing import Optional
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
@@ -10,7 +10,7 @@ from models.modelo import Usuario as UsuarioModel, RoleEnum, Cliente as ClienteM
 from auth.security import Security
 from auth.roles import require_roles
 
-Usuario = APIRouter()
+Usuario = APIRouter(tags=["Usuarios"])
 
 
 # --------- Schemas ---------
@@ -33,12 +33,20 @@ class InputPaginatedRequest(BaseModel):
 
 
 # --------- Rutas ---------
-@Usuario.get("/")
+@Usuario.get(
+    "/",
+    summary="Probar módulo Usuarios",
+    description="Endpoint de prueba para verificar que el router de usuarios responde.",
+)
 def hello_user():
     return "Hello User!!!"
 
 
-@Usuario.get("/me")
+@Usuario.get(
+    "/me",
+    summary="Perfil del usuario autenticado",
+    description="Devuelve información básica del usuario autenticado, incluyendo role y cliente_id si aplica.",
+)
 def me(req: Request, db: Session = Depends(get_db)):
     payload = Security.verify_token(req.headers)
     if not isinstance(payload, dict) or "iat" not in payload:
@@ -63,7 +71,11 @@ def me(req: Request, db: Session = Depends(get_db)):
     )
 
 
-@Usuario.get("/users/all")
+@Usuario.get(
+    "/users/all",
+    summary="Listar usuarios (admin)",
+    description="Devuelve todos los usuarios con datos básicos. Requiere rol gerente u operador.",
+)
 def get_all_users(req: Request, db: Session = Depends(get_db)):
     guard = require_roles(req.headers, {"gerente", "operador"})
     if guard:
@@ -86,7 +98,11 @@ def get_all_users(req: Request, db: Session = Depends(get_db)):
     )
 
 
-@Usuario.post("/users/paginated")
+@Usuario.post(
+    "/users/paginated",
+    summary="Listar usuarios paginados (admin)",
+    description="Lista usuarios usando cursor por id. Requiere rol gerente u operador.",
+)
 def get_users_paginated(
     req: Request, body: InputPaginatedRequest, db: Session = Depends(get_db)
 ):
@@ -115,7 +131,11 @@ def get_users_paginated(
     )
 
 
-@Usuario.post("/users/login")
+@Usuario.post(
+    "/users/login",
+    summary="Iniciar sesión y obtener JWT",
+    description="Permite autenticarse con documento o email. Devuelve token JWT y rol.",
+)
 def login_user(us: InputLogin, db: Session = Depends(get_db)):
     try:
         if not us.email and not us.documento:
@@ -173,9 +193,12 @@ def login_user(us: InputLogin, db: Session = Depends(get_db)):
         return JSONResponse(status_code=500, content={"message": "Error en login"})
 
 
-@Usuario.post("/users/add")
+@Usuario.post(
+    "/users/add",
+    summary="Crear usuario (solo gerente)",
+    description="Crea un usuario administrativo o cliente. Requiere rol gerente.",
+)
 def create_user(us: InputUsuarioCreate, req: Request, db: Session = Depends(get_db)):
-    # 👇 solo gerente puede crear
     guard = require_roles(req.headers, {"gerente"})
     if guard:
         return guard

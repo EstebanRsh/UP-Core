@@ -1,0 +1,119 @@
+# ARQUITECTURA.txt
+UP-Core — Descripción de Arquitectura (MVP)
+===========================================
+
+1) Objetivo
+-----------
+Backend para ISP: gestión de usuarios, clientes, planes, contratos, facturas administrativas y pagos con generación de **recibo PDF**. Código simple, modular y mantenible.
+
+2) Capas y módulos
+------------------
+- Presentación (API):
+  - FastAPI + APIRouter por dominio: `routes/usuario.py`, `cliente.py`, `plan.py`, `contrato.py`, `factura.py`, `pago.py`, `facturacion.py`
+  - Documentado con `tags`, `summary`, `description` → Swagger (/docs)
+
+- Dominio/Modelo:
+  - SQLAlchemy ORM en `models/modelo.py` (tablas y relaciones)
+  - Enums para estados/roles
+  - Relaciones:
+    Cliente 1—N Contrato
+    Plan    1—N Contrato
+    Contrato 1—N Factura
+    Factura  1—N Pago
+
+- Infraestructura:
+  - `configs/db.py`: engine, `SessionLocal`, `Base`, `get_db()`
+  - `auth/security.py`: JWT (generate/verify) y hora local
+  - `auth/roles.py`: guards `require_roles` y `require_owner_or_roles`
+  - Storage de archivos en `backend/storage/**` (no versionado)
+  - Plantillas PDF en `assets/pdf/*`
+
+- Integraciones:
+  - WeasyPrint + Jinja2 para PDF
+  - (Futuro) Alembic para migraciones
+
+3) Diagrama (texto)
+-------------------
+[API Routers]  →  [Servicios/Helpers en rutas]  →  [ORM SQLAlchemy]  →  [PostgreSQL]
+                                   |
+                                   └→ [WeasyPrint/Jinja2] → [PDF a storage]
+
+Entidades:
+Usuario (role)
+Cliente ──< Contrato >── Plan
+Contrato ──< Factura ──< Pago
+ConfigFacturacion (única fila)
+
+4) Ciclo de request (resumen)
+-----------------------------
+- FastAPI recibe request → Dependencia `get_db()` abre sesión
+- Guard de autorización:
+  - `require_roles(...)` valida JWT + rol
+  - `require_owner_or_roles(...)` valida rol o propiedad del recurso
+- Lógica de endpoint:
+  - Consultas y transacciones via `db` (SQLAlchemy)
+  - Manejo de errores con `try/except` + JSONResponse
+- Respuesta → Cierre de sesión (por dependencia)
+
+5) Ownership (clientes)
+-----------------------
+- Clientes solo pueden ver/descargar sus propios recursos
+- Estrategia:
+  - JWT incluye `role` y `user_id`
+  - Se deduce `cliente_id` (si el user es cliente) y se compara con `cliente_id` asociado al recurso (vía contrato/factura/pago)
+  - En mismatch, devolver 404 (no revelar existencia)
+
+6) PDF de recibos (pipeline)
+----------------------------
+- Entrada: pago (monto, método), factura (nro, período), contrato y cliente (identidad)
+- Datos de empresa: `config_facturacion`
+- Render:
+  - Jinja2 renderiza `assets/pdf/receipt.html` con datos → HTML final
+  - WeasyPrint + `assets/pdf/style.css` → PDF
+- Salida:
+  - Carpeta: `storage/recibos/AAAA/MM/DD/`
+  - Nombre: `rec_{DDMMAAAA}_{apellido}_{nombre}_per-{MMAAAA}_p{pagoId}.pdf`
+  - Guardar `pago.recibo_path` (relativa) para servir luego
+
+7) Persistencia y storage
+-------------------------
+- BD: PostgreSQL; restricciones básicas (únicos y FKs)
+- Storage: disco local (no versionado); estructura por día para escalabilidad
+- Rutas relativas en BD (evita acoplar a path absoluto)
+- Backups: por carpeta diaria; políticas de retención sugeridas (externo al MVP)
+
+8) Seguridad
+------------
+- JWT secret en `.env` (no hardcodear en prod)
+- (Pendiente) Hash de contraseñas (passlib/bcrypt)
+- Validación de tipos/mimes en subida de comprobantes
+- Manejo de errores consistente (JSON) sin filtrar datos sensibles
+
+9) Decisiones de diseño (MVP)
+-----------------------------
+- Simplicidad antes que complejidad: sin Alembic en MVP; scripts SQL manuales
+- PDF solo para **recibos** (no para facturas)
+- Paginación por cursor simple (id)
+- Guards de rol/propiedad a nivel ruta (sin middleware global para mantener claridad)
+- Plantillas PDF versionadas; archivos generados **no** versionados
+
+10) Extensiones futuras
+-----------------------
+- Alembic (migraciones)
+- Hash de contraseñas y políticas de contraseña
+- Exportaciones CSV/Excel
+- Notificaciones (vencimientos), colas de tareas
+- Rate limiting / CORS más estricto
+- Pruebas automatizadas (pytest + httpx)
+
+11) Consideraciones de mantenimiento
+------------------------------------
+- Al modificar modelos:
+  - Ajustar `models/modelo.py`, crear SQL de alter y aplicarlo
+  - Revisar endpoints afectados y colecciones Postman
+- Al agregar endpoints:
+  - Sumar `summary/description` y actualizar documentación/colecciones
+- Al cambiar PDF:
+  - Editar `assets/pdf/receipt.html` y `style.css`, verificar en un pago de prueba
+- Logs/errores:
+  - Mensajes claros para debugging; evitar exponer trazas en prod

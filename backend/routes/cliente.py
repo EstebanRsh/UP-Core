@@ -11,7 +11,7 @@ from configs.db import get_db
 from models.modelo import Cliente as ClienteModel, EstadoClienteEnum
 from auth.roles import require_roles
 
-Cliente = APIRouter()
+Cliente = APIRouter(tags=["Clientes"])
 
 
 # -------- Schemas --------
@@ -52,12 +52,20 @@ def _next_nro_cliente(db: Session) -> str:
 
 
 # ------- Rutas -------
-@Cliente.get("/clientes/hello")
+@Cliente.get(
+    "/clientes/hello",
+    summary="Probar módulo Clientes",
+    description="Endpoint de prueba para verificar que el router de clientes responde.",
+)
 def hello_cliente():
     return "Hello Cliente!!!"
 
 
-@Cliente.post("/clientes")
+@Cliente.post(
+    "/clientes",
+    summary="Crear cliente",
+    description="Crea un cliente con datos personales y de contacto. Requiere rol gerente u operador.",
+)
 def crear_cliente(
     req: Request, body: InputClienteCreate, db: Session = Depends(get_db)
 ):
@@ -116,7 +124,11 @@ def crear_cliente(
         )
 
 
-@Cliente.get("/clientes/all")
+@Cliente.get(
+    "/clientes/all",
+    summary="Listar clientes (admin)",
+    description="Lista completa de clientes para administración. Requiere rol gerente u operador.",
+)
 def listar_clientes(req: Request, db: Session = Depends(get_db)):
     guard = require_roles(req.headers, {"gerente", "operador"})
     if guard:
@@ -148,7 +160,11 @@ def listar_clientes(req: Request, db: Session = Depends(get_db)):
         )
 
 
-@Cliente.post("/clientes/paginated")
+@Cliente.post(
+    "/clientes/paginated",
+    summary="Listar clientes paginados (admin)",
+    description="Devuelve clientes paginados por id ascendente. Requiere rol gerente u operador.",
+)
 def clientes_paginados(
     req: Request, body: InputPaginatedRequest, db: Session = Depends(get_db)
 ):
@@ -186,7 +202,11 @@ def clientes_paginados(
         )
 
 
-@Cliente.get("/clientes/{cliente_id}")
+@Cliente.get(
+    "/clientes/{cliente_id}",
+    summary="Detalle de cliente (admin)",
+    description="Devuelve los datos del cliente por ID. Requiere rol gerente u operador.",
+)
 def obtener_cliente(cliente_id: int, req: Request, db: Session = Depends(get_db)):
     guard = require_roles(req.headers, {"gerente", "operador"})
     if guard:
@@ -219,7 +239,11 @@ def obtener_cliente(cliente_id: int, req: Request, db: Session = Depends(get_db)
         )
 
 
-@Cliente.put("/clientes/{cliente_id}")
+@Cliente.put(
+    "/clientes/{cliente_id}",
+    summary="Actualizar cliente (admin)",
+    description="Actualiza datos del cliente y valida duplicados de documento/email.",
+)
 def actualizar_cliente(
     cliente_id: int,
     body: InputClienteUpdate,
@@ -285,7 +309,11 @@ def actualizar_cliente(
         )
 
 
-@Cliente.delete("/clientes/{cliente_id}")
+@Cliente.delete(
+    "/clientes/{cliente_id}",
+    summary="Inactivar cliente (baja lógica)",
+    description="Marca al cliente como inactivo (no borra registros). Requiere rol gerente u operador.",
+)
 def eliminar_cliente(cliente_id: int, req: Request, db: Session = Depends(get_db)):
     guard = require_roles(req.headers, {"gerente", "operador"})
     if guard:
@@ -296,7 +324,7 @@ def eliminar_cliente(cliente_id: int, req: Request, db: Session = Depends(get_db
             return JSONResponse(
                 status_code=404, content={"message": "Cliente no encontrado"}
             )
-        c.estado = EstadoClienteEnum.inactivo  # baja lógica
+        c.estado = EstadoClienteEnum.inactivo
         db.commit()
         return JSONResponse(status_code=200, content={"message": "Cliente inactivado"})
     except Exception as ex:

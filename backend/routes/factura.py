@@ -6,6 +6,15 @@ from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+# backend/routes/factura.py
+from datetime import date, datetime, timedelta
+import calendar
+from typing import Optional, List
+
+from fastapi import APIRouter, Request, Depends
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+
 from sqlalchemy.orm import Session
 from sqlalchemy import asc
 
@@ -19,7 +28,7 @@ from models.modelo import (
     EstadoFacturaEnum,
 )
 
-Factura = APIRouter()
+Factura = APIRouter(tags=["Facturas"])
 
 
 # =========================
@@ -33,7 +42,7 @@ class InputFacturaCreate(BaseModel):
     periodo_fin: Optional[date] = None
     mora: Optional[float] = None
     recargo: Optional[float] = None
-    pdf_path: Optional[str] = None  # mantenemos el campo por compatibilidad
+    pdf_path: Optional[str] = None  # compatibilidad
 
 
 class InputFacturaUpdate(BaseModel):
@@ -70,12 +79,20 @@ def _float(n):
 # =========================
 # Rutas (sin PDF)
 # =========================
-@Factura.get("/facturas/hello")
+@Factura.get(
+    "/facturas/hello",
+    summary="Probar módulo Facturas",
+    description="Endpoint de prueba para verificar que el router de facturas responde.",
+)
 def hello_facturas():
     return "Hello Facturas!!!"
 
 
-@Factura.get("/mi/facturas")
+@Factura.get(
+    "/mi/facturas",
+    summary="Mis facturas (cliente)",
+    description="Lista las facturas que pertenecen al cliente autenticado.",
+)
 def mis_facturas(req: Request, db: Session = Depends(get_db)):
     guard, cliente_id = require_owner_or_roles(req.headers, db, allowed_roles=None)
     if guard:
@@ -106,7 +123,11 @@ def mis_facturas(req: Request, db: Session = Depends(get_db)):
     return JSONResponse(status_code=200, content=out)
 
 
-@Factura.post("/facturas")
+@Factura.post(
+    "/facturas",
+    summary="Crear factura (admin)",
+    description="Crea una factura para contrato y período (única por contrato/mes/año).",
+)
 def crear_factura(
     req: Request, body: InputFacturaCreate, db: Session = Depends(get_db)
 ):
@@ -168,7 +189,6 @@ def crear_factura(
         db.commit()
         db.refresh(nueva)
 
-        # Numeración definitiva: YYYYMM-ID
         nueva.nro = f"{nueva.periodo_anio}{nueva.periodo_mes:02d}-{nueva.id:06d}"
         db.commit()
         db.refresh(nueva)
@@ -201,7 +221,11 @@ def crear_factura(
         )
 
 
-@Factura.get("/facturas/all")
+@Factura.get(
+    "/facturas/all",
+    summary="Listar facturas (admin)",
+    description="Lista todas las facturas para administración. Requiere rol gerente u operador.",
+)
 def listar_facturas(req: Request, db: Session = Depends(get_db)):
     guard = require_roles(req.headers, {"gerente", "operador"})
     if guard:
@@ -238,7 +262,11 @@ def listar_facturas(req: Request, db: Session = Depends(get_db)):
         )
 
 
-@Factura.post("/facturas/paginated")
+@Factura.post(
+    "/facturas/paginated",
+    summary="Listar facturas paginadas (admin)",
+    description="Devuelve facturas paginadas por id ascendente. Requiere rol gerente u operador.",
+)
 def facturas_paginadas(
     req: Request, body: InputPaginatedRequest, db: Session = Depends(get_db)
 ):
@@ -273,7 +301,11 @@ def facturas_paginadas(
         )
 
 
-@Factura.get("/facturas/{factura_id}")
+@Factura.get(
+    "/facturas/{factura_id}",
+    summary="Detalle de factura (admin)",
+    description="Devuelve la factura por ID. Requiere rol gerente u operador.",
+)
 def obtener_factura(factura_id: int, req: Request, db: Session = Depends(get_db)):
     guard = require_roles(req.headers, {"gerente", "operador"})
     if guard:
@@ -311,7 +343,11 @@ def obtener_factura(factura_id: int, req: Request, db: Session = Depends(get_db)
         )
 
 
-@Factura.put("/facturas/{factura_id}")
+@Factura.put(
+    "/facturas/{factura_id}",
+    summary="Actualizar factura (admin)",
+    description="Actualiza mora, recargo, vencimiento y estado. Requiere rol gerente u operador.",
+)
 def actualizar_factura(
     factura_id: int,
     body: InputFacturaUpdate,
@@ -355,7 +391,11 @@ def actualizar_factura(
         )
 
 
-@Factura.post("/facturas/{factura_id}/emitir")
+@Factura.post(
+    "/facturas/{factura_id}/emitir",
+    summary="Emitir factura (admin)",
+    description="Pasa estado a EMITIDA, fija emitida_en y vencimiento en base a días de vencimiento.",
+)
 def emitir_factura(
     factura_id: int, body: InputEmitir, req: Request, db: Session = Depends(get_db)
 ):
@@ -393,7 +433,11 @@ def emitir_factura(
         )
 
 
-@Factura.get("/contratos/{contrato_id}/facturas")
+@Factura.get(
+    "/contratos/{contrato_id}/facturas",
+    summary="Listar facturas de un contrato (admin)",
+    description="Devuelve las facturas asociadas a un contrato. Requiere rol gerente u operador.",
+)
 def facturas_por_contrato(
     contrato_id: int, req: Request, db: Session = Depends(get_db)
 ):

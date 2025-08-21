@@ -1,8 +1,8 @@
 {
   "info": {
     "name": "UP-Core API — Pagos",
-    "_postman_id": "c41f5e0a-pagos-updated",
-    "description": "Pagos: crear, por factura, listar, paginar y /mi/pagos (ownership). Requiere factura emitida.",
+    "_postman_id": "c41f5e0a-pagos-updated-v2",
+    "description": "Pagos: crear, por factura, listar, paginar, /mi/pagos, subir/descargar comprobante y generar/descargar recibo (ownership). Requiere factura emitida.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -28,13 +28,17 @@
     },
     {
       "name": "Crear /pagos",
+      "event": [{ "listen":"test","script":{"exec":[
+        "let j={}; try{j=pm.response.json()}catch(e){}",
+        "if(j && j.id){ pm.environment.set('pagoId', j.id); }"
+      ],"type":"text/javascript"}}],
       "request": {
         "method":"POST",
         "header":[
           { "key":"Authorization","value":"Bearer {{token}}","type":"text" },
           { "key":"Content-Type","value":"application/json" }
         ],
-        "body":{ "mode":"raw","raw":"{\n  \"factura_id\": {{facturaId}},\n  \"monto\": 15000,\n  \"metodo\": \"transferencia\",\n  \"referencia\": \"TX123\"\n}" },
+        "body":{ "mode":"raw","raw":"{\n  \"factura_id\": {{facturaId}},\n  \"monto\": 15000,\n  \"metodo\": \"transferencia\",\n  \"referencia\": \"TX123\",\n  \"generar_recibo\": true\n}" },
         "url":{ "raw":"{{baseUrl}}/pagos","host":["{{baseUrl}}"],"path":["pagos"] }
       }
     },
@@ -66,6 +70,46 @@
         "method":"GET",
         "header":[{ "key":"Authorization","value":"Bearer {{token}}","type":"text"}],
         "url":{ "raw":"{{baseUrl}}/mi/pagos","host":["{{baseUrl}}"],"path":["mi","pagos"] }
+      }
+    },
+    {
+      "name": "Subir comprobante /pagos/{{pagoId}}/comprobante (multipart/form-data)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "file", "type": "file", "src": [] }
+          ]
+        },
+        "url": { "raw":"{{baseUrl}}/pagos/{{pagoId}}/comprobante","host":["{{baseUrl}}"],"path":["pagos","{{pagoId}}","comprobante"] }
+      }
+    },
+    {
+      "name": "Descargar comprobante /pagos/{{pagoId}}/comprobante",
+      "request": {
+        "method": "GET",
+        "header": [ { "key":"Authorization","value":"Bearer {{token}}","type":"text" } ],
+        "url": { "raw":"{{baseUrl}}/pagos/{{pagoId}}/comprobante","host":["{{baseUrl}}"],"path":["pagos","{{pagoId}}","comprobante"] }
+      }
+    },
+    {
+      "name": "Generar recibo /pagos/{{pagoId}}/recibo",
+      "request": {
+        "method": "POST",
+        "header": [ { "key":"Authorization","value":"Bearer {{token}}","type":"text" } ],
+        "url": { "raw":"{{baseUrl}}/pagos/{{pagoId}}/recibo","host":["{{baseUrl}}"],"path":["pagos","{{pagoId}}","recibo"] }
+      }
+    },
+    {
+      "name": "Descargar recibo /pagos/{{pagoId}}/recibo",
+      "request": {
+        "method": "GET",
+        "header": [ { "key":"Authorization","value":"Bearer {{token}}","type":"text" } ],
+        "url": { "raw":"{{baseUrl}}/pagos/{{pagoId}}/recibo","host":["{{baseUrl}}"],"path":["pagos","{{pagoId}}","recibo"] }
       }
     }
   ]

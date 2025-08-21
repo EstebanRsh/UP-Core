@@ -1,139 +1,91 @@
-from datetime import date, datetime, timedelta
-import calendar
-from typing import Optional, List
-
+# backend/routes/facturacion.py
+from typing import Optional
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-
 from sqlalchemy.orm import Session
-from sqlalchemy import asc
 
 from configs.db import get_db
 from auth.roles import require_roles
-from models.modelo import (
-    Factura as FacturaModel,
-    Contrato as ContratoModel,
-    Plan as PlanModel,
-    EstadoContratoEnum,
-    EstadoFacturaEnum,
+from models.modelo import ConfigFacturacion as ConfigModel
+
+Facturacion = APIRouter(tags=["Configuración"])
+
+
+class InputConfig(BaseModel):
+    company_name: Optional[str] = Field(default=None, max_length=120)
+    company_dni: Optional[str] = Field(default=None, max_length=32)
+    company_address: Optional[str] = Field(default=None, max_length=200)
+    company_contact: Optional[str] = Field(default=None, max_length=200)
+    logo_path: Optional[str] = Field(default=None, max_length=200)
+
+
+@Facturacion.get(
+    "/config/facturacion",
+    summary="Obtener configuración de facturación",
+    description="Devuelve los datos de la empresa para el recibo PDF. Requiere rol gerente u operador.",
 )
-
-Facturacion = APIRouter()
-
-
-class InputGenerarMes(BaseModel):
-    anio: Optional[int] = None  # por defecto: hoy
-    mes: Optional[int] = Field(default=None, ge=1, le=12)
-    emitir: bool = False  # si true, deja en 'emitida'
-    dias_vencimiento: int = Field(default=10, ge=1, le=60)
-
-
-def _month_bounds(anio: int, mes: int) -> tuple[date, date]:
-    first = date(anio, mes, 1)
-    last_day = calendar.monthrange(anio, mes)[1]
-    last = date(anio, mes, last_day)
-    return first, last
-
-
-@Facturacion.get("/facturacion/hello")
-def hello_facturacion():
-    return "Hello Facturacion!!!"
-
-
-@Facturacion.post("/facturacion/generar-mes")
-def generar_mes(req: Request, body: InputGenerarMes, db: Session = Depends(get_db)):
-    """
-    Genera facturas del período para TODOS los contratos ACTIVOS.
-    Idempotente por la UNIQUE (contrato_id, periodo_anio, periodo_mes).
-    """
+def get_config(req: Request, db: Session = Depends(get_db)):
     guard = require_roles(req.headers, {"gerente", "operador"})
     if guard:
         return guard
-
-    today = date.today()
-    anio = body.anio or today.year
-    mes = body.mes or today.month
-    p_ini, p_fin = _month_bounds(anio, mes)
-
-    try:
-        contratos: List[ContratoModel] = (
-            db.query(ContratoModel)
-            .filter(ContratoModel.estado == EstadoContratoEnum.activo)
-            .order_by(asc(ContratoModel.id))
-            .all()
-        )
-        creadas = 0
-        saltadas = 0
-        for c in contratos:
-            # ¿Ya existe factura de este período para el contrato?
-            ya = (
-                db.query(FacturaModel)
-                .filter(
-                    FacturaModel.contrato_id == c.id,
-                    FacturaModel.periodo_anio == anio,
-                    FacturaModel.periodo_mes == mes,
-                )
-                .first()
-            )
-            if ya:
-                saltadas += 1
-                continue
-
-            plan = db.get(PlanModel, c.plan_id)
-            if not plan or not plan.activo:
-                # Si el plan está inactivo, no facturamos (regla simple inicial)
-                saltadas += 1
-                continue
-
-            subtotal = plan.precio_mensual
-            total = subtotal  # sin mora/recargo por ahora
-            estado = (
-                EstadoFacturaEnum.emitida if body.emitir else EstadoFacturaEnum.borrador
-            )
-
-            nueva = FacturaModel(
-                nro="PENDIENTE",
-                contrato_id=c.id,
-                periodo_mes=mes,
-                periodo_anio=anio,
-                periodo_inicio=p_ini,
-                periodo_fin=p_fin,
-                subtotal=subtotal,
-                total=total,
-                estado=estado,
-                emitida_en=(
-                    datetime.utcnow() if estado == EstadoFacturaEnum.emitida else None
-                ),
-                vencimiento=(
-                    (p_fin + timedelta(days=body.dias_vencimiento))
-                    if estado == EstadoFacturaEnum.emitida
-                    else None
-                ),
-                pdf_path=None,
-            )
-            db.add(nueva)
-            db.commit()
-            db.refresh(nueva)
-
-            # Numeración definitiva (YYYYMM-ID)
-            nueva.nro = f"{anio}{mes:02d}-{nueva.id:06d}"
-            db.commit()
-            creadas += 1
-
+    cfg = db.query(ConfigModel).first()
+    if not cfg:
         return JSONResponse(
             status_code=200,
             content={
-                "periodo": f"{anio}-{mes:02d}",
-                "contratos_analizados": len(contratos),
-                "facturas_creadas": creadas,
-                "facturas_existentes_o_saltadas": saltadas,
-                "emitidas": body.emitir,
+                "company_name": "UP-Core ISP",
+                "company_address": "Av. Principal 123, Buenos Aires",
+                "company_dni": "30-99999999-7",
+                "company_contact": "soporte@upcore.local | +54 11 5555-5555",
+                "logo_path": None,
             },
+        )
+    return JSONResponse(
+        status_code=200,
+        content={
+            "company_name": cfg.company_name,
+            "company_dni": cfg.company_dni,
+            "company_address": cfg.company_address,
+            "company_contact": cfg.company_contact,
+            "logo_path": cfg.logo_path,
+        },
+    )
+
+
+@Facturacion.put(
+    "/config/facturacion",
+    summary="Actualizar configuración de facturación",
+    description="Actualiza datos de la empresa (nombre, CUIT, dirección, contacto y logo). Requiere rol gerente.",
+)
+def update_config(body: InputConfig, req: Request, db: Session = Depends(get_db)):
+    guard = require_roles(req.headers, {"gerente"})
+    if guard:
+        return guard
+    try:
+        cfg = db.query(ConfigModel).first()
+        if not cfg:
+            cfg = ConfigModel()
+            db.add(cfg)
+
+        if body.company_name is not None:
+            cfg.company_name = body.company_name
+        if body.company_dni is not None:
+            cfg.company_dni = body.company_dni
+        if body.company_address is not None:
+            cfg.company_address = body.company_address
+        if body.company_contact is not None:
+            cfg.company_contact = body.company_contact
+        if body.logo_path is not None:
+            cfg.logo_path = body.logo_path
+
+        db.commit()
+        return JSONResponse(
+            status_code=200, content={"message": "Configuración actualizada"}
         )
     except Exception as ex:
         db.rollback()
-        print("Error generar_mes ---->> ", ex)
+        print("Error update_config ---->> ", ex)
         return JSONResponse(
-            status_code=500, content={"message": "Error al generar facturación del mes"}
+            status_code=500, content={"message": "Error al actualizar configuración"}
         )

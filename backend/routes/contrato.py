@@ -1,3 +1,4 @@
+# backend/routes/contrato.py
 from datetime import date
 from typing import Optional, List
 
@@ -17,7 +18,7 @@ from models.modelo import (
     EstadoContratoEnum,
 )
 
-Contrato = APIRouter()
+Contrato = APIRouter(tags=["Contratos"])
 
 
 class InputContratoCreate(BaseModel):
@@ -47,12 +48,20 @@ def _ensure_exists(db: Session, model, id_: int, nombre: str):
     return obj
 
 
-@Contrato.get("/contratos/hello")
+@Contrato.get(
+    "/contratos/hello",
+    summary="Probar módulo Contratos",
+    description="Endpoint de prueba para verificar que el router de contratos responde.",
+)
 def hello_contratos():
     return "Hello Contratos!!!"
 
 
-@Contrato.get("/mi/contratos")
+@Contrato.get(
+    "/mi/contratos",
+    summary="Mis contratos (cliente)",
+    description="Lista los contratos que pertenecen al cliente autenticado.",
+)
 def mis_contratos(req: Request, db: Session = Depends(get_db)):
     guard, cliente_id = require_owner_or_roles(req.headers, db, allowed_roles=None)
     if guard:
@@ -79,7 +88,11 @@ def mis_contratos(req: Request, db: Session = Depends(get_db)):
     return JSONResponse(status_code=200, content=salida)
 
 
-@Contrato.post("/contratos")
+@Contrato.post(
+    "/contratos",
+    summary="Crear contrato (admin)",
+    description="Crea un contrato para un cliente y un plan. Requiere rol gerente u operador.",
+)
 def crear_contrato(
     req: Request, body: InputContratoCreate, db: Session = Depends(get_db)
 ):
@@ -126,7 +139,11 @@ def crear_contrato(
         )
 
 
-@Contrato.get("/contratos/all")
+@Contrato.get(
+    "/contratos/all",
+    summary="Listar contratos (admin)",
+    description="Lista completa de contratos para administración. Requiere rol gerente u operador.",
+)
 def listar_contratos(req: Request, db: Session = Depends(get_db)):
     guard = require_roles(req.headers, {"gerente", "operador"})
     if guard:
@@ -158,7 +175,11 @@ def listar_contratos(req: Request, db: Session = Depends(get_db)):
         )
 
 
-@Contrato.post("/contratos/paginated")
+@Contrato.post(
+    "/contratos/paginated",
+    summary="Listar contratos paginados (admin)",
+    description="Devuelve contratos paginados por id ascendente. Requiere rol gerente u operador.",
+)
 def contratos_paginados(
     req: Request, body: InputPaginatedRequest, db: Session = Depends(get_db)
 ):
@@ -196,7 +217,11 @@ def contratos_paginados(
         )
 
 
-@Contrato.get("/contratos/{contrato_id}")
+@Contrato.get(
+    "/contratos/{contrato_id}",
+    summary="Detalle de contrato (admin)",
+    description="Devuelve el contrato por ID. Requiere rol gerente u operador.",
+)
 def obtener_contrato(contrato_id: int, req: Request, db: Session = Depends(get_db)):
     guard = require_roles(req.headers, {"gerente", "operador"})
     if guard:
@@ -229,7 +254,11 @@ def obtener_contrato(contrato_id: int, req: Request, db: Session = Depends(get_d
         )
 
 
-@Contrato.put("/contratos/{contrato_id}")
+@Contrato.put(
+    "/contratos/{contrato_id}",
+    summary="Actualizar contrato (admin)",
+    description="Actualiza dirección, estado y fechas del contrato. Requiere rol gerente u operador.",
+)
 def actualizar_contrato(
     contrato_id: int,
     body: InputContratoUpdate,
@@ -246,7 +275,6 @@ def actualizar_contrato(
                 status_code=404, content={"message": "Contrato no encontrado"}
             )
 
-        # Cambiar plan
         if body.plan_id is not None:
             plan = _ensure_exists(db, PlanModel, body.plan_id, "Plan")
             if not plan.activo:
@@ -259,7 +287,6 @@ def actualizar_contrato(
         if body.direccion_instalacion is not None:
             c.direccion_instalacion = body.direccion_instalacion
 
-        # Validaciones de transición de estado
         if body.estado is not None:
             nuevo = body.estado
             actual = c.estado
@@ -277,7 +304,6 @@ def actualizar_contrato(
                     )
                 if not c.fecha_alta:
                     c.fecha_alta = date.today()
-
             c.estado = nuevo
 
         if body.fecha_baja is not None:
@@ -300,7 +326,11 @@ def actualizar_contrato(
         )
 
 
-@Contrato.post("/contratos/{contrato_id}/activar")
+@Contrato.post(
+    "/contratos/{contrato_id}/activar",
+    summary="Activar contrato (admin)",
+    description="Cambia el estado a ACTIVO si las condiciones del plan lo permiten.",
+)
 def activar_contrato(contrato_id: int, req: Request, db: Session = Depends(get_db)):
     guard = require_roles(req.headers, {"gerente", "operador"})
     if guard:
@@ -335,7 +365,11 @@ def activar_contrato(contrato_id: int, req: Request, db: Session = Depends(get_d
         )
 
 
-@Contrato.post("/contratos/{contrato_id}/suspender")
+@Contrato.post(
+    "/contratos/{contrato_id}/suspender",
+    summary="Suspender contrato (admin)",
+    description="Cambia el estado a SUSPENDIDO si el contrato está ACTIVO.",
+)
 def suspender_contrato(contrato_id: int, req: Request, db: Session = Depends(get_db)):
     guard = require_roles(req.headers, {"gerente", "operador"})
     if guard:
@@ -363,7 +397,11 @@ def suspender_contrato(contrato_id: int, req: Request, db: Session = Depends(get
         )
 
 
-@Contrato.post("/contratos/{contrato_id}/baja")
+@Contrato.post(
+    "/contratos/{contrato_id}/baja",
+    summary="Dar de baja contrato (admin)",
+    description="Cambia el estado a BAJA y fija fecha_baja.",
+)
 def baja_contrato(contrato_id: int, req: Request, db: Session = Depends(get_db)):
     guard = require_roles(req.headers, {"gerente", "operador"})
     if guard:
