@@ -1,0 +1,13 @@
+Planes.sql (asegura que existan planes).
+
+Usuarios.sql (crea gerente/operador/clientes usuarios).
+
+Clientes.sql (crea clientes).
+
+(Opcional) Cliente.sql para vincular cliente.usuario_id ↔ usuario.id de clientes.
+
+Contratos.sql (crea contratos para algunos clientes). No dependas de IDs 1..300; tu archivo actual sí lo hace.
+
+Facturas (usa el script corregido arriba).
+
+Pagos (usa el script corregido arriba).

@@ -1,8 +1,10 @@
 from datetime import datetime
 from typing import Optional, List
+import os, uuid, shutil
+from pathlib import Path
 
-from fastapi import APIRouter, Request, Depends
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Request, Depends, UploadFile, File
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel, Field
 
 from sqlalchemy.orm import Session
@@ -22,6 +24,9 @@ from models.modelo import (
 Pago = APIRouter()
 
 
+# =========================================================
+# Schemas
+# =========================================================
 class InputPagoCreate(BaseModel):
     factura_id: int
     monto: float = Field(gt=0)
@@ -36,8 +41,21 @@ class InputPaginatedRequest(BaseModel):
     last_seen_id: Optional[int] = None
 
 
+# =========================================================
+# Helpers
+# =========================================================
 def _float(n):
     return float(n) if n is not None else None
+
+
+def _storage_root() -> Path:
+    return Path(__file__).resolve().parent.parent / "storage"
+
+
+def _comprobante_dir() -> Path:
+    base = _storage_root() / "comprobantes"
+    base.mkdir(parents=True, exist_ok=True)
+    return base
 
 
 def _recalcular_estado_factura(db: Session, factura: FacturaModel):
@@ -55,37 +73,12 @@ def _recalcular_estado_factura(db: Session, factura: FacturaModel):
     return total_pagado
 
 
+# =========================================================
+# Rutas
+# =========================================================
 @Pago.get("/pagos/hello")
 def hello_pagos():
     return "Hello Pagos!!!"
-
-
-@Pago.get("/mi/pagos")
-def mis_pagos(req: Request, db: Session = Depends(get_db)):
-    guard, cliente_id = require_owner_or_roles(req.headers, db, allowed_roles=None)
-    if guard:
-        return guard
-    rows: List[PagoModel] = (
-        db.query(PagoModel)
-        .join(FacturaModel, PagoModel.factura_id == FacturaModel.id)
-        .join(ContratoModel, FacturaModel.contrato_id == ContratoModel.id)
-        .filter(ContratoModel.cliente_id == cliente_id)
-        .order_by(asc(PagoModel.id))
-        .all()
-    )
-    out = [
-        {
-            "id": p.id,
-            "factura_id": p.factura_id,
-            "fecha": p.fecha.isoformat() if p.fecha else None,
-            "monto": _float(p.monto),
-            "metodo": p.metodo,
-            "estado": p.estado,
-            "referencia": p.referencia,
-        }
-        for p in rows
-    ]
-    return JSONResponse(status_code=200, content=out)
 
 
 @Pago.post("/pagos")
@@ -222,4 +215,140 @@ def pagos_paginados(
         print("Error pagos_paginados ---->> ", ex)
         return JSONResponse(
             status_code=500, content={"message": "Error al paginar pagos"}
+        )
+
+
+# =========================================================
+# Comprobante: upload & download (admin o cliente dueño)
+# =========================================================
+ALLOWED_MIMES = {"application/pdf", "image/jpeg", "image/png"}
+ALLOWED_EXTS = {"pdf", "jpg", "jpeg", "png"}
+
+
+@Pago.post("/pagos/{pago_id}/comprobante")
+async def subir_comprobante(
+    pago_id: int,
+    req: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    guard, cliente_id = require_owner_or_roles(
+        req.headers, db, allowed_roles={"gerente", "operador"}
+    )
+    if guard:
+        return guard
+    try:
+        p = db.get(PagoModel, pago_id)
+        if not p:
+            return JSONResponse(
+                status_code=404, content={"message": "Pago no encontrado"}
+            )
+        f = db.get(FacturaModel, p.factura_id)
+        c = db.get(ContratoModel, f.contrato_id) if f else None
+        if not f or not c:
+            return JSONResponse(
+                status_code=404, content={"message": "Factura/Contrato no encontrado"}
+            )
+
+        # Ownership si es cliente
+        if cliente_id is not None and c.cliente_id != cliente_id:
+            return JSONResponse(
+                status_code=404, content={"message": "Pago no encontrado"}
+            )
+
+        # Validar mime/ext
+        content_type = (file.content_type or "").lower()
+        ext = (os.path.splitext(file.filename or "")[1][1:] or "").lower()
+        if content_type not in ALLOWED_MIMES or ext not in ALLOWED_EXTS:
+            return JSONResponse(
+                status_code=415,
+                content={"message": "Formato no permitido. Use PDF/JPG/PNG"},
+            )
+
+        # Guardar archivo
+        destino_dir = (
+            _comprobante_dir()
+            / f"{datetime.utcnow().year}"
+            / f"{datetime.utcnow().month:02d}"
+        )
+        destino_dir.mkdir(parents=True, exist_ok=True)
+        nombre = f"pago_{pago_id}_{uuid.uuid4().hex[:8]}.{ext}"
+        destino = destino_dir / nombre
+
+        with destino.open("wb") as out:
+            shutil.copyfileobj(file.file, out)
+
+        p.comprobante_path = str(destino.relative_to(_storage_root()))
+        db.commit()
+        db.refresh(p)
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": "Comprobante subido",
+                "comprobante_path": p.comprobante_path,
+            },
+        )
+    except Exception as ex:
+        db.rollback()
+        print("Error subir_comprobante ---->> ", ex)
+        return JSONResponse(
+            status_code=500, content={"message": "Error al subir comprobante"}
+        )
+
+
+@Pago.get("/pagos/{pago_id}/comprobante")
+def descargar_comprobante(pago_id: int, req: Request, db: Session = Depends(get_db)):
+    guard, cliente_id = require_owner_or_roles(
+        req.headers, db, allowed_roles={"gerente", "operador"}
+    )
+    if guard:
+        return guard
+    try:
+        p = db.get(PagoModel, pago_id)
+        if not p:
+            return JSONResponse(
+                status_code=404, content={"message": "Pago no encontrado"}
+            )
+        f = db.get(FacturaModel, p.factura_id)
+        c = db.get(ContratoModel, f.contrato_id) if f else None
+        if not f or not c:
+            return JSONResponse(
+                status_code=404, content={"message": "Factura/Contrato no encontrado"}
+            )
+
+        # Ownership si es cliente
+        if cliente_id is not None and c.cliente_id != cliente_id:
+            return JSONResponse(
+                status_code=404, content={"message": "Comprobante no encontrado"}
+            )
+
+        if not p.comprobante_path:
+            return JSONResponse(
+                status_code=404, content={"message": "Comprobante no disponible"}
+            )
+        file_path = _storage_root() / p.comprobante_path
+        if not file_path.exists():
+            return JSONResponse(
+                status_code=404,
+                content={"message": "Archivo no encontrado en servidor"},
+            )
+
+        # Inferir mime
+        ext = file_path.suffix.lower()
+        mime = "application/octet-stream"
+        if ext == ".pdf":
+            mime = "application/pdf"
+        elif ext in (".jpg", ".jpeg"):
+            mime = "image/jpeg"
+        elif ext == ".png":
+            mime = "image/png"
+
+        return FileResponse(
+            path=str(file_path), media_type=mime, filename=file_path.name
+        )
+    except Exception as ex:
+        print("Error descargar_comprobante ---->> ", ex)
+        return JSONResponse(
+            status_code=500, content={"message": "Error al descargar comprobante"}
         )
