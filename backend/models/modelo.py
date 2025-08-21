@@ -230,7 +230,8 @@ class Pago(Base):
     monto = Column(Numeric(12, 2), nullable=False)
     metodo = Column(SAEnum(MetodoPagoEnum, name="metodo_pago_enum"), nullable=False)
     referencia = Column(String(80), nullable=True)  # nro de transferencia, etc.
-    comprobante_path = Column(String(300), nullable=True)  # ruta al archivo subido
+    comprobante_path = Column(String(300), nullable=True)
+    recibo_path = Column(String(300), nullable=True)
     estado = Column(
         SAEnum(EstadoPagoEnum, name="estado_pago_enum"),
         nullable=False,
@@ -240,3 +241,17 @@ class Pago(Base):
     creado_en = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     factura = relationship("Factura", back_populates="pagos")
+
+
+# -----------------------------
+# Configuración de Facturación (datos de la empresa)
+# -----------------------------
+class ConfigFacturacion(Base):
+    __tablename__ = "config_facturacion"
+
+    id = Column(Integer, primary_key=True)
+    company_name = Column(String(120), nullable=False)
+    company_dni = Column(String(32), nullable=False)
+    company_address = Column(String(200), nullable=False)
+    company_contact = Column(String(200), nullable=False)
+    logo_path = Column(String(300), nullable=True)

@@ -17,6 +17,7 @@ from models.modelo import (
     Factura as FacturaModel,
     Contrato as ContratoModel,
     Cliente as ClienteModel,
+    ConfigFacturacion as ConfigFacturacionModel,
     EstadoPagoEnum,
     MetodoPagoEnum,
     EstadoFacturaEnum,
@@ -126,6 +127,26 @@ def _recalcular_estado_factura(db: Session, factura: FacturaModel):
     return total_pagado
 
 
+def _get_company_config(db: Session) -> dict:
+    cfg = db.query(ConfigFacturacionModel).first()
+    if cfg:
+        return {
+            "company_name": cfg.company_name,
+            "company_address": cfg.company_address,
+            "company_dni": cfg.company_dni,
+            "company_contact": cfg.company_contact,
+            "logo_path": cfg.logo_path,  # p.ej. "logo.png" si existe en assets/pdf/
+        }
+    # fallback si no hay registro
+    return {
+        "company_name": "UP-Core ISP",
+        "company_address": "Av. Principal 123, Buenos Aires",
+        "company_dni": "30-99999999-7",
+        "company_contact": "soporte@upcore.local | +54 11 5555-5555",
+        "logo_path": None,
+    }
+
+
 # ===============================
 # PDF Recibo (HTML/CSS)
 # ===============================
@@ -135,6 +156,7 @@ def _render_recibo_weasy(
     factura: FacturaModel,
     contrato: ContratoModel,
     cliente: ClienteModel,
+    company: dict,
 ):
     if not WEASY_OK:
         raise RuntimeError("Faltan dependencias: weasyprint/jinja2/tinycss2/cssselect2")
@@ -144,15 +166,6 @@ def _render_recibo_weasy(
         autoescape=select_autoescape(["html", "xml"]),
     )
     tpl = env.get_template("receipt.html")
-
-    # Datos de empresa (luego migran a ConfigFacturacion en BD)
-    company = {
-        "company_name": "UP-Core ISP",
-        "company_address": "Av. Principal 123, Buenos Aires",
-        "company_dni": "30-99999999-7",
-        "company_contact": "soporte@upcore.local | +54 11 5555-5555",
-        "logo_path": None,  # p.ej. "logo.png" si existe en assets/pdf/
-    }
 
     data = {
         "receipt": {
@@ -232,7 +245,12 @@ def crear_pago(req: Request, body: InputPagoCreate, db: Session = Depends(get_db
             cli = db.get(ClienteModel, c.cliente_id) if c else None
             if c and cli:
                 destino = _recibo_path_for(nuevo, f, cli)
-                _render_recibo_weasy(destino, nuevo, f, c, cli)
+                company = _get_company_config(db)
+                _render_recibo_weasy(destino, nuevo, f, c, cli, company)
+                # persistimos el path del recibo
+                nuevo.recibo_path = str(destino.relative_to(_storage_root()))
+                db.commit()
+                db.refresh(nuevo)
 
         return JSONResponse(
             status_code=201,
@@ -243,6 +261,7 @@ def crear_pago(req: Request, body: InputPagoCreate, db: Session = Depends(get_db
                 "metodo": nuevo.metodo,
                 "estado": nuevo.estado,
                 "factura_estado": f.estado,
+                "recibo_path": nuevo.recibo_path,
             },
         )
     except Exception as ex:
@@ -272,6 +291,7 @@ def pagos_por_factura(factura_id: int, req: Request, db: Session = Depends(get_d
                 "estado": p.estado,
                 "referencia": p.referencia,
                 "comprobante_path": p.comprobante_path,
+                "recibo_path": p.recibo_path,
             }
             for p in rows
         ]
@@ -297,6 +317,7 @@ def listar_pagos(req: Request, db: Session = Depends(get_db)):
                 "monto": _float(p.monto),
                 "metodo": p.metodo,
                 "estado": p.estado,
+                "recibo_path": p.recibo_path,
             }
             for p in rows
         ]
@@ -327,6 +348,7 @@ def pagos_paginados(
                 "monto": _float(p.monto),
                 "metodo": p.metodo,
                 "estado": p.estado,
+                "recibo_path": p.recibo_path,
             }
             for p in rows
         ]
@@ -511,13 +533,19 @@ def generar_recibo(pago_id: int, req: Request, db: Session = Depends(get_db)):
             )
 
         destino = _recibo_path_for(p, f, cli)
-        _render_recibo_weasy(destino, p, f, c, cli)
+        company = _get_company_config(db)
+        _render_recibo_weasy(destino, p, f, c, cli, company)
+
+        # Persistimos el path (por si se generó desde aquí)
+        p.recibo_path = str(destino.relative_to(_storage_root()))
+        db.commit()
+        db.refresh(p)
 
         return JSONResponse(
             status_code=200,
             content={
                 "message": "Recibo generado",
-                "recibo_path": str(destino.relative_to(_storage_root())),
+                "recibo_path": p.recibo_path,
             },
         )
     except Exception as ex:
@@ -553,7 +581,12 @@ def descargar_recibo(pago_id: int, req: Request, db: Session = Depends(get_db)):
                 status_code=404, content={"message": "Recibo no encontrado"}
             )
 
-        file_path = _recibo_path_for(p, f, cli)
+        # Preferimos el path persistido; si no, intentamos reconstruir
+        if p.recibo_path:
+            file_path = _storage_root() / p.recibo_path
+        else:
+            file_path = _recibo_path_for(p, f, cli)
+
         if not file_path.exists():
             return JSONResponse(
                 status_code=404, content={"message": "Recibo no generado aún"}
