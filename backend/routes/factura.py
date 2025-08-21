@@ -1,11 +1,9 @@
 from datetime import date, datetime, timedelta
 import calendar
 from typing import Optional, List
-import os
-from pathlib import Path
 
 from fastapi import APIRouter, Request, Depends
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from sqlalchemy.orm import Session
@@ -21,22 +19,12 @@ from models.modelo import (
     EstadoFacturaEnum,
 )
 
-# --------- PDF (reportlab) ---------
-try:
-    from reportlab.lib.pagesizes import A4
-    from reportlab.pdfgen import canvas
-    from reportlab.lib.units import mm
-
-    REPORTLAB_OK = True
-except Exception:
-    REPORTLAB_OK = False
-
 Factura = APIRouter()
 
 
-# =========================================================
+# =========================
 # Schemas
-# =========================================================
+# =========================
 class InputFacturaCreate(BaseModel):
     contrato_id: int
     periodo_mes: int = Field(ge=1, le=12)
@@ -45,7 +33,7 @@ class InputFacturaCreate(BaseModel):
     periodo_fin: Optional[date] = None
     mora: Optional[float] = None
     recargo: Optional[float] = None
-    pdf_path: Optional[str] = None
+    pdf_path: Optional[str] = None  # mantenemos el campo por compatibilidad
 
 
 class InputFacturaUpdate(BaseModel):
@@ -65,9 +53,9 @@ class InputEmitir(BaseModel):
     dias_vencimiento: int = Field(default=10, ge=1, le=60)
 
 
-# =========================================================
+# =========================
 # Helpers
-# =========================================================
+# =========================
 def _month_bounds(anio: int, mes: int) -> tuple[date, date]:
     first = date(anio, mes, 1)
     last_day = calendar.monthrange(anio, mes)[1]
@@ -79,121 +67,9 @@ def _float(n):
     return float(n) if n is not None else None
 
 
-def _storage_root() -> Path:
-    return Path(__file__).resolve().parent.parent / "storage"
-
-
-def _pdf_path_for(f: FacturaModel) -> Path:
-    # storage/facturas/YYYY/MM/factura_000123.pdf
-    base = _storage_root() / "facturas" / f"{f.periodo_anio}" / f"{f.periodo_mes:02d}"
-    base.mkdir(parents=True, exist_ok=True)
-    return base / f"factura_{f.id:06d}.pdf"
-
-
-def _render_factura_pdf(
-    path: Path, f: FacturaModel, c: ContratoModel, cli: ClienteModel, p: PlanModel
-):
-    if not REPORTLAB_OK:
-        raise RuntimeError("reportlab no está instalado")
-    w, h = A4
-    can = canvas.Canvas(str(path), pagesize=A4)
-    x_margin = 20 * mm
-    y = h - 20 * mm
-
-    # Encabezado
-    can.setFont("Helvetica-Bold", 14)
-    can.drawString(x_margin, y, "ISP Manager — Factura")
-    can.setFont("Helvetica", 10)
-    y -= 14
-    can.drawString(x_margin, y, f"Nro: {f.nro or 'PENDIENTE'}")
-    y -= 12
-    can.drawString(
-        x_margin,
-        y,
-        f"Fecha emisión: {f.emitida_en.isoformat() if f.emitida_en else '-'}",
-    )
-    y -= 12
-    can.drawString(
-        x_margin,
-        y,
-        f"Vencimiento: {f.vencimiento.isoformat() if f.vencimiento else '-'}",
-    )
-
-    # Cliente
-    y -= 20
-    can.setFont("Helvetica-Bold", 12)
-    can.drawString(x_margin, y, "Cliente")
-    can.setFont("Helvetica", 10)
-    y -= 14
-    can.drawString(x_margin, y, f"{cli.apellido}, {cli.nombre} — Doc: {cli.documento}")
-    y -= 12
-    can.drawString(x_margin, y, f"Dirección: {cli.direccion}")
-    y -= 12
-    can.drawString(x_margin, y, f"Email: {cli.email or '-'} Tel: {cli.telefono or '-'}")
-
-    # Contrato / Plan
-    y -= 20
-    can.setFont("Helvetica-Bold", 12)
-    can.drawString(x_margin, y, "Contrato / Plan")
-    can.setFont("Helvetica", 10)
-    y -= 14
-    can.drawString(
-        x_margin,
-        y,
-        f"Contrato ID: {c.id} — Dirección instalación: {c.direccion_instalacion}",
-    )
-    y -= 12
-    can.drawString(
-        x_margin,
-        y,
-        f"Plan: {p.nombre} ({p.vel_down}/{p.vel_up} Mbps) — Precio: ${_float(p.precio_mensual):,.2f}",
-    )
-
-    # Período
-    y -= 20
-    can.setFont("Helvetica-Bold", 12)
-    can.drawString(x_margin, y, "Período")
-    can.setFont("Helvetica", 10)
-    y -= 14
-    can.drawString(
-        x_margin,
-        y,
-        f"{f.periodo_anio}-{f.periodo_mes:02d}  [{f.periodo_inicio}  a  {f.periodo_fin}]",
-    )
-
-    # Totales
-    y -= 20
-    can.setFont("Helvetica-Bold", 12)
-    can.drawString(x_margin, y, "Detalle")
-    can.setFont("Helvetica", 10)
-    y -= 14
-    can.drawString(x_margin, y, f"Subtotal: ${_float(f.subtotal):,.2f}")
-    y -= 12
-    can.drawString(x_margin, y, f"Mora:     ${_float(f.mora or 0):,.2f}")
-    y -= 12
-    can.drawString(x_margin, y, f"Recargo:  ${_float(f.recargo or 0):,.2f}")
-    y -= 14
-    can.setFont("Helvetica-Bold", 12)
-    can.drawString(x_margin, y, f"TOTAL:    ${_float(f.total):,.2f}")
-
-    # Pie
-    y -= 24
-    can.setFont("Helvetica", 9)
-    can.drawString(
-        x_margin,
-        y,
-        "Medios de pago: Transferencia / Efectivo. Adjunte comprobante en el portal de pagos.",
-    )
-    y -= 12
-    can.drawString(x_margin, y, "Gracias por su preferencia.")
-
-    can.showPage()
-    can.save()
-
-
-# =========================================================
-# Rutas
-# =========================================================
+# =========================
+# Rutas (sin PDF)
+# =========================
 @Factura.get("/facturas/hello")
 def hello_facturas():
     return "Hello Facturas!!!"
@@ -248,6 +124,7 @@ def crear_factura(
             return JSONResponse(
                 status_code=404, content={"message": "Plan del contrato no encontrado"}
             )
+
         dup = (
             db.query(FacturaModel)
             .filter(
@@ -291,6 +168,7 @@ def crear_factura(
         db.commit()
         db.refresh(nueva)
 
+        # Numeración definitiva: YYYYMM-ID
         nueva.nro = f"{nueva.periodo_anio}{nueva.periodo_mes:02d}-{nueva.id:06d}"
         db.commit()
         db.refresh(nueva)
@@ -468,7 +346,7 @@ def actualizar_factura(
         if changed:
             f.total = (f.subtotal or 0) + (f.mora or 0) + (f.recargo or 0)
             db.commit()
-        return JSONResponse(status_code=200, content={"message": "Factura actualizada"})
+        return JSONResponse(status_code=200, content={"message": "Factura actualizado"})
     except Exception as ex:
         db.rollback()
         print("Error actualizar_factura ---->> ", ex)
@@ -545,104 +423,4 @@ def facturas_por_contrato(
         return JSONResponse(
             status_code=500,
             content={"message": "Error al listar facturas del contrato"},
-        )
-
-
-# =========================================================
-# PDF: generar y descargar
-# =========================================================
-@Factura.post("/facturas/{factura_id}/pdf")
-def generar_pdf(factura_id: int, req: Request, db: Session = Depends(get_db)):
-    guard = require_roles(req.headers, {"gerente", "operador"})
-    if guard:
-        return guard
-    try:
-        if not REPORTLAB_OK:
-            return JSONResponse(
-                status_code=500,
-                content={"message": "Falta dependencia: pip install reportlab"},
-            )
-        f = db.get(FacturaModel, factura_id)
-        if not f:
-            return JSONResponse(
-                status_code=404, content={"message": "Factura no encontrada"}
-            )
-        c = db.get(ContratoModel, f.contrato_id)
-        if not c:
-            return JSONResponse(
-                status_code=404, content={"message": "Contrato no encontrado"}
-            )
-        cli = db.get(ClienteModel, c.cliente_id)
-        p = db.get(PlanModel, c.plan_id)
-        if not cli or not p:
-            return JSONResponse(
-                status_code=404,
-                content={"message": "Datos incompletos para renderizar"},
-            )
-
-        pdf_path = _pdf_path_for(f)
-        _render_factura_pdf(pdf_path, f, c, cli, p)
-
-        f.pdf_path = str(pdf_path.relative_to(_storage_root()))
-        db.commit()
-        db.refresh(f)
-
-        return JSONResponse(
-            status_code=200, content={"message": "PDF generado", "pdf_path": f.pdf_path}
-        )
-    except Exception as ex:
-        db.rollback()
-        print("Error generar_pdf ---->> ", ex)
-        return JSONResponse(
-            status_code=500, content={"message": "Error al generar PDF"}
-        )
-
-
-@Factura.get("/facturas/{factura_id}/pdf")
-def descargar_pdf(factura_id: int, req: Request, db: Session = Depends(get_db)):
-    # Cliente dueño puede descargar su propia factura; admin ve todas
-    guard, cliente_id = require_owner_or_roles(
-        req.headers, db, allowed_roles={"gerente", "operador"}
-    )
-    if guard:
-        return guard
-    try:
-        f = db.get(FacturaModel, factura_id)
-        if not f:
-            return JSONResponse(
-                status_code=404, content={"message": "Factura no encontrada"}
-            )
-
-        # Ownership si es cliente
-        if cliente_id is not None:
-            c = db.get(ContratoModel, f.contrato_id)
-            if not c or c.cliente_id != cliente_id:
-                return JSONResponse(
-                    status_code=404, content={"message": "Factura no encontrada"}
-                )
-
-        # Path del archivo
-        file_path = None
-        if f.pdf_path:
-            file_path = _storage_root() / f.pdf_path
-        else:
-            # Intentar localizar por convención
-            candidate = _pdf_path_for(f)
-            if candidate.exists():
-                file_path = candidate
-
-        if not file_path or not Path(file_path).exists():
-            return JSONResponse(
-                status_code=404, content={"message": "PDF no generado aún"}
-            )
-
-        return FileResponse(
-            path=str(file_path),
-            media_type="application/pdf",
-            filename=f"factura_{f.id:06d}.pdf",
-        )
-    except Exception as ex:
-        print("Error descargar_pdf ---->> ", ex)
-        return JSONResponse(
-            status_code=500, content={"message": "Error al descargar PDF"}
         )

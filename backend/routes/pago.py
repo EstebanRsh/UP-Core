@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-import os, uuid, shutil
+import os, uuid, shutil, re, unicodedata
 from pathlib import Path
 
 from fastapi import APIRouter, Request, Depends, UploadFile, File
@@ -16,17 +16,27 @@ from models.modelo import (
     Pago as PagoModel,
     Factura as FacturaModel,
     Contrato as ContratoModel,
+    Cliente as ClienteModel,
     EstadoPagoEnum,
     MetodoPagoEnum,
     EstadoFacturaEnum,
 )
 
+# HTML→PDF
+try:
+    from jinja2 import Environment, FileSystemLoader, select_autoescape
+    from weasyprint import HTML, CSS
+
+    WEASY_OK = True
+except Exception:
+    WEASY_OK = False
+
 Pago = APIRouter()
 
 
-# =========================================================
+# ===============================
 # Schemas
-# =========================================================
+# ===============================
 class InputPagoCreate(BaseModel):
     factura_id: int
     monto: float = Field(gt=0)
@@ -34,6 +44,7 @@ class InputPagoCreate(BaseModel):
     referencia: Optional[str] = None
     comprobante_path: Optional[str] = None
     confirmar: bool = True
+    generar_recibo: bool = True  # autogenerar recibo al crear
 
 
 class InputPaginatedRequest(BaseModel):
@@ -41,9 +52,9 @@ class InputPaginatedRequest(BaseModel):
     last_seen_id: Optional[int] = None
 
 
-# =========================================================
+# ===============================
 # Helpers
-# =========================================================
+# ===============================
 def _float(n):
     return float(n) if n is not None else None
 
@@ -52,10 +63,52 @@ def _storage_root() -> Path:
     return Path(__file__).resolve().parent.parent / "storage"
 
 
+def _assets_root() -> Path:
+    return Path(__file__).resolve().parent.parent / "assets" / "pdf"
+
+
 def _comprobante_dir() -> Path:
     base = _storage_root() / "comprobantes"
     base.mkdir(parents=True, exist_ok=True)
     return base
+
+
+def _slugify(texto: str) -> str:
+    # sin acentos, minúsculas, solo [a-z0-9_-], espacios -> _
+    nfkd = unicodedata.normalize("NFKD", texto)
+    s = "".join([c for c in nfkd if not unicodedata.combining(c)])
+    s = s.lower().replace(" ", "_")
+    s = re.sub(r"[^a-z0-9_-]", "", s)
+    s = re.sub(r"_{2,}", "_", s)
+    return s.strip("_")
+
+
+def _recibo_dir(pago: PagoModel) -> Path:
+    # /storage/recibos/AAAA/MM/DD/
+    dt = pago.fecha or datetime.utcnow()
+    base = (
+        _storage_root() / "recibos" / f"{dt.year}" / f"{dt.month:02d}" / f"{dt.day:02d}"
+    )
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
+def _recibo_filename(
+    pago: PagoModel, factura: FacturaModel, cliente: ClienteModel
+) -> str:
+    # rec_{DDMMAAAA}_{apellido}_{nombre}_per-{MMAAAA}_p{pagoId}.pdf
+    dt = pago.fecha or datetime.utcnow()
+    ddmmyyyy = dt.strftime("%d%m%Y")
+    per_mmaaaa = f"{factura.periodo_mes:02d}{factura.periodo_anio}"
+    apellido = _slugify(cliente.apellido or "")
+    nombre = _slugify(cliente.nombre or "")
+    return f"rec_{ddmmyyyy}_{apellido}_{nombre}_per-{per_mmaaaa}_p{pago.id}.pdf"
+
+
+def _recibo_path_for(
+    pago: PagoModel, factura: FacturaModel, cliente: ClienteModel
+) -> Path:
+    return _recibo_dir(pago) / _recibo_filename(pago, factura, cliente)
 
 
 def _recalcular_estado_factura(db: Session, factura: FacturaModel):
@@ -73,9 +126,68 @@ def _recalcular_estado_factura(db: Session, factura: FacturaModel):
     return total_pagado
 
 
-# =========================================================
+# ===============================
+# PDF Recibo (HTML/CSS)
+# ===============================
+def _render_recibo_weasy(
+    destino: Path,
+    pago: PagoModel,
+    factura: FacturaModel,
+    contrato: ContratoModel,
+    cliente: ClienteModel,
+):
+    if not WEASY_OK:
+        raise RuntimeError("Faltan dependencias: weasyprint/jinja2/tinycss2/cssselect2")
+
+    env = Environment(
+        loader=FileSystemLoader(str(_assets_root())),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    tpl = env.get_template("receipt.html")
+
+    # Datos de empresa (luego migran a ConfigFacturacion en BD)
+    company = {
+        "company_name": "UP-Core ISP",
+        "company_address": "Av. Principal 123, Buenos Aires",
+        "company_dni": "30-99999999-7",
+        "company_contact": "soporte@upcore.local | +54 11 5555-5555",
+        "logo_path": None,  # p.ej. "logo.png" si existe en assets/pdf/
+    }
+
+    data = {
+        "receipt": {
+            "logo_path": company["logo_path"],
+            "company_name": company["company_name"],
+            "company_address": company["company_address"],
+            "company_dni": company["company_dni"],
+            "company_contact": company["company_contact"],
+            "client_name": f"{cliente.apellido}, {cliente.nombre}",
+            "client_dni": f"Doc: {cliente.documento}",
+            "client_address": cliente.direccion or "",
+            "client_phone": cliente.telefono or "",
+            "client_email": cliente.email or "",
+            "receipt_number": f"REC-{pago.id:06d}",
+            "payment_date": (pago.fecha or datetime.utcnow()).strftime("%Y-%m-%d"),
+            "item_description": f"Pago de factura {factura.nro} - Servicio {contrato.id}",
+            "base_amount": float(pago.monto or 0),
+            "late_fee": float(factura.mora or 0),
+            "total_paid": float(pago.monto or 0),
+            "payment_method": pago.metodo,
+            "invoice_number": factura.nro
+            or f"{factura.periodo_anio}{factura.periodo_mes:02d}-{factura.id:06d}",
+            "due_date": factura.vencimiento.isoformat() if factura.vencimiento else "-",
+        }
+    }
+
+    css = _assets_root() / "style.css"
+    HTML(string=tpl.render(**data), base_url=str(_assets_root())).write_pdf(
+        target=str(destino), stylesheets=[CSS(filename=str(css))]
+    )
+
+
+# ===============================
 # Rutas
-# =========================================================
+# ===============================
 @Pago.get("/pagos/hello")
 def hello_pagos():
     return "Hello Pagos!!!"
@@ -92,6 +204,7 @@ def crear_pago(req: Request, body: InputPagoCreate, db: Session = Depends(get_db
             return JSONResponse(
                 status_code=404, content={"message": "Factura no encontrada"}
             )
+
         nuevo = PagoModel(
             factura_id=f.id,
             fecha=datetime.utcnow(),
@@ -108,9 +221,19 @@ def crear_pago(req: Request, body: InputPagoCreate, db: Session = Depends(get_db
         db.add(nuevo)
         db.commit()
         db.refresh(nuevo)
+
         _recalcular_estado_factura(db, f)
         db.commit()
         db.refresh(f)
+
+        # Autogenerar recibo si se pide
+        if body.generar_recibo and WEASY_OK:
+            c = db.get(ContratoModel, f.contrato_id)
+            cli = db.get(ClienteModel, c.cliente_id) if c else None
+            if c and cli:
+                destino = _recibo_path_for(nuevo, f, cli)
+                _render_recibo_weasy(destino, nuevo, f, c, cli)
+
         return JSONResponse(
             status_code=201,
             content={
@@ -218,9 +341,9 @@ def pagos_paginados(
         )
 
 
-# =========================================================
-# Comprobante: upload & download (admin o cliente dueño)
-# =========================================================
+# ===============================
+# Upload / download comprobante
+# ===============================
 ALLOWED_MIMES = {"application/pdf", "image/jpeg", "image/png"}
 ALLOWED_EXTS = {"pdf", "jpg", "jpeg", "png"}
 
@@ -250,13 +373,11 @@ async def subir_comprobante(
                 status_code=404, content={"message": "Factura/Contrato no encontrado"}
             )
 
-        # Ownership si es cliente
         if cliente_id is not None and c.cliente_id != cliente_id:
             return JSONResponse(
                 status_code=404, content={"message": "Pago no encontrado"}
             )
 
-        # Validar mime/ext
         content_type = (file.content_type or "").lower()
         ext = (os.path.splitext(file.filename or "")[1][1:] or "").lower()
         if content_type not in ALLOWED_MIMES or ext not in ALLOWED_EXTS:
@@ -265,7 +386,6 @@ async def subir_comprobante(
                 content={"message": "Formato no permitido. Use PDF/JPG/PNG"},
             )
 
-        # Guardar archivo
         destino_dir = (
             _comprobante_dir()
             / f"{datetime.utcnow().year}"
@@ -317,7 +437,6 @@ def descargar_comprobante(pago_id: int, req: Request, db: Session = Depends(get_
                 status_code=404, content={"message": "Factura/Contrato no encontrado"}
             )
 
-        # Ownership si es cliente
         if cliente_id is not None and c.cliente_id != cliente_id:
             return JSONResponse(
                 status_code=404, content={"message": "Comprobante no encontrado"}
@@ -334,7 +453,6 @@ def descargar_comprobante(pago_id: int, req: Request, db: Session = Depends(get_
                 content={"message": "Archivo no encontrado en servidor"},
             )
 
-        # Inferir mime
         ext = file_path.suffix.lower()
         mime = "application/octet-stream"
         if ext == ".pdf":
@@ -351,4 +469,101 @@ def descargar_comprobante(pago_id: int, req: Request, db: Session = Depends(get_
         print("Error descargar_comprobante ---->> ", ex)
         return JSONResponse(
             status_code=500, content={"message": "Error al descargar comprobante"}
+        )
+
+
+# ===============================
+# Recibo PDF: generar y descargar
+# ===============================
+@Pago.post("/pagos/{pago_id}/recibo")
+def generar_recibo(pago_id: int, req: Request, db: Session = Depends(get_db)):
+    guard, cliente_id = require_owner_or_roles(
+        req.headers, db, allowed_roles={"gerente", "operador"}
+    )
+    if guard:
+        return guard
+    try:
+        if not WEASY_OK:
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "message": "Faltan dependencias: conda install -c conda-forge weasyprint jinja2 tinycss2 cssselect2"
+                },
+            )
+
+        p = db.get(PagoModel, pago_id)
+        if not p:
+            return JSONResponse(
+                status_code=404, content={"message": "Pago no encontrado"}
+            )
+        f = db.get(FacturaModel, p.factura_id)
+        c = db.get(ContratoModel, f.contrato_id) if f else None
+        cli = db.get(ClienteModel, c.cliente_id) if c else None
+        if not f or not c or not cli:
+            return JSONResponse(
+                status_code=404, content={"message": "Datos incompletos"}
+            )
+
+        # Ownership si es cliente
+        if cliente_id is not None and c.cliente_id != cliente_id:
+            return JSONResponse(
+                status_code=404, content={"message": "Pago no encontrado"}
+            )
+
+        destino = _recibo_path_for(p, f, cli)
+        _render_recibo_weasy(destino, p, f, c, cli)
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": "Recibo generado",
+                "recibo_path": str(destino.relative_to(_storage_root())),
+            },
+        )
+    except Exception as ex:
+        print("Error generar_recibo ---->> ", ex)
+        return JSONResponse(
+            status_code=500, content={"message": "Error al generar recibo"}
+        )
+
+
+@Pago.get("/pagos/{pago_id}/recibo")
+def descargar_recibo(pago_id: int, req: Request, db: Session = Depends(get_db)):
+    guard, cliente_id = require_owner_or_roles(
+        req.headers, db, allowed_roles={"gerente", "operador"}
+    )
+    if guard:
+        return guard
+    try:
+        p = db.get(PagoModel, pago_id)
+        if not p:
+            return JSONResponse(
+                status_code=404, content={"message": "Pago no encontrado"}
+            )
+        f = db.get(FacturaModel, p.factura_id)
+        c = db.get(ContratoModel, f.contrato_id) if f else None
+        cli = db.get(ClienteModel, c.cliente_id) if c else None
+        if not f or not c or not cli:
+            return JSONResponse(
+                status_code=404, content={"message": "Datos incompletos"}
+            )
+
+        if cliente_id is not None and c.cliente_id != cliente_id:
+            return JSONResponse(
+                status_code=404, content={"message": "Recibo no encontrado"}
+            )
+
+        file_path = _recibo_path_for(p, f, cli)
+        if not file_path.exists():
+            return JSONResponse(
+                status_code=404, content={"message": "Recibo no generado aún"}
+            )
+
+        return FileResponse(
+            path=str(file_path), media_type="application/pdf", filename=file_path.name
+        )
+    except Exception as ex:
+        print("Error descargar_recibo ---->> ", ex)
+        return JSONResponse(
+            status_code=500, content={"message": "Error al descargar recibo"}
         )
