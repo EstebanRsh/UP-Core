@@ -18,7 +18,10 @@ export type ClientesPage = {
   next_cursor: number | null;
 };
 
-export async function listarClientesPaginated(limit = 20, last_seen_id: number | null = null): Promise<ClientesPage> {
+export async function listarClientesPaginated(
+  limit = 20,
+  last_seen_id: number | null = null
+): Promise<ClientesPage> {
   const { data } = await api.post("/clientes/paginated", { limit, last_seen_id });
   return data;
 }
@@ -32,5 +35,25 @@ export async function crearCliente(payload: {
   direccion: string;
 }): Promise<Cliente> {
   const { data } = await api.post("/clientes", payload);
+  return data;
+}
+
+export async function actualizarCliente(
+  id: number,
+  payload: {
+    nombre?: string;
+    apellido?: string;
+    documento?: string;
+    telefono?: string;
+    email?: string;
+    direccion?: string;
+  }
+): Promise<Cliente> {
+  const { data } = await api.put(`/clientes/${id}`, payload);
+  return data;
+}
+
+export async function inactivarCliente(id: number): Promise<{ message: string }> {
+  const { data } = await api.delete(`/clientes/${id}`);
   return data;
 }
