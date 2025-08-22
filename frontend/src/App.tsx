@@ -1,41 +1,20 @@
-import { Container, Box, Heading, Button, Text } from "@chakra-ui/react";
-import { useEffect, useState } from "react";
-import { useTheme } from "next-themes";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import AppLayout from "./layout/AppLayout";
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import { Text } from "@chakra-ui/react";
 
-function App() {
-  // next-themes: resolvedTheme = "light" | "dark"
-  const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  if (!mounted) {
-    // evita parpadeo de tema en la 1ª pintura
-    return (
-      <Container maxW="container.sm" py={12}>
-        <Text>Cargando UI…</Text>
-      </Container>
-    );
-  }
-
-  const toggle = () => setTheme(resolvedTheme === "light" ? "dark" : "light");
-
+export default function App() {
   return (
-    <Container maxW="container.md" py={12}>
-      <Box display="flex" justifyContent="space-between" alignItems="center">
-        <Heading size="lg" color="brand.500">
-          UP-Core Frontend
-        </Heading>
-        <Button onClick={toggle}>
-          Modo {resolvedTheme === "light" ? "oscuro" : "claro"}
-        </Button>
-      </Box>
-
-      <Text mt={6}>✅ Proyecto inicial con Chakra v3 configurado.</Text>
-      <Text mt={2} color="fg.muted">
-        Hola Core
-      </Text>
-    </Container>
+    <BrowserRouter>
+      <Routes>
+        <Route element={<AppLayout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          {/* 404 simple */}
+          <Route path="*" element={<Text>404 - Página no encontrada</Text>} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   );
 }
-
-export default App;
