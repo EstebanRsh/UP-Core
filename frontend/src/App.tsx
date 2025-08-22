@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import Panel from "./pages/Panel";
 import Clientes from "./pages/Clientes";
 import Planes from "./pages/Planes";
+import Contratos from "./pages/Contratos";
 import Forbidden from "./pages/Forbidden";
 import ProtectedRoute from "./auth/ProtectedRoute";
 import RoleGuard from "./auth/RoleGuard";
@@ -17,7 +18,6 @@ export default function App() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
-
           {/* Panel requiere login + rol gerente u operador */}
           <Route
             path="/panel"
@@ -49,7 +49,17 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-
+          import Contratos from "./pages/Contratos"; // ...
+          <Route
+            path="/contratos"
+            element={
+              <ProtectedRoute>
+                <RoleGuard allow={["gerente", "operador"]}>
+                  <Contratos />
+                </RoleGuard>
+              </ProtectedRoute>
+            }
+          />
           <Route path="/forbidden" element={<Forbidden />} />
           <Route path="*" element={<Text>404 - Página no encontrada</Text>} />
         </Route>
