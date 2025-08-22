@@ -38,6 +38,8 @@ export default function AppLayout() {
               {token && <NavLink to="/clientes">Clientes</NavLink>}
               {token && <NavLink to="/planes">Planes</NavLink>}
               {token && <NavLink to="/contratos">Contratos</NavLink>}
+              {token && <NavLink to="/facturas">Facturas</NavLink>}
+              {token && <NavLink to="/pagos">Pagos</NavLink>}
 
               {token && (
                 <Button variant="ghost" onClick={logout}>

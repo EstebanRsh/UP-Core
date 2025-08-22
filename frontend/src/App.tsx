@@ -6,6 +6,8 @@ import Panel from "./pages/Panel";
 import Clientes from "./pages/Clientes";
 import Planes from "./pages/Planes";
 import Contratos from "./pages/Contratos";
+import Facturas from "./pages/Facturas";
+import Pagos from "./pages/Pagos";
 import Forbidden from "./pages/Forbidden";
 import ProtectedRoute from "./auth/ProtectedRoute";
 import RoleGuard from "./auth/RoleGuard";
@@ -40,6 +42,16 @@ export default function App() {
             }
           />
           <Route
+            path="/pagos"
+            element={
+              <ProtectedRoute>
+                <RoleGuard allow={["gerente", "operador"]}>
+                  <Pagos />
+                </RoleGuard>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/planes"
             element={
               <ProtectedRoute>
@@ -49,13 +61,22 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          import Contratos from "./pages/Contratos"; // ...
           <Route
             path="/contratos"
             element={
               <ProtectedRoute>
                 <RoleGuard allow={["gerente", "operador"]}>
                   <Contratos />
+                </RoleGuard>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/facturas"
+            element={
+              <ProtectedRoute>
+                <RoleGuard allow={["gerente", "operador"]}>
+                  <Facturas />
                 </RoleGuard>
               </ProtectedRoute>
             }

@@ -13,6 +13,9 @@ import {
 import {
   listarContratosPaginated,
   crearContrato,
+  activarContrato,
+  suspenderContrato,
+  darDeBajaContrato,
   type Contrato,
 } from "../api/contratos";
 
@@ -82,6 +85,67 @@ export default function Contratos() {
     } catch (e: any) {
       setMsg(
         e?.response?.data?.message ?? e?.message ?? "Error al crear contrato"
+      );
+    }
+  };
+
+  // ----- Acciones de estado -----
+  const onActivar = async (c: Contrato) => {
+    if (!confirm(`¿Activar contrato #${c.id}?`)) return;
+    setMsg("");
+    try {
+      await activarContrato(c.id);
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === c.id ? { ...it, estado: "activo" as const } : it
+        )
+      );
+      setMsg("Contrato activado");
+    } catch (e: any) {
+      setMsg(
+        e?.response?.data?.message ?? e?.message ?? "Error al activar contrato"
+      );
+    }
+  };
+
+  const onSuspender = async (c: Contrato) => {
+    if (!confirm(`¿Suspender contrato #${c.id}?`)) return;
+    setMsg("");
+    try {
+      await suspenderContrato(c.id);
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === c.id ? { ...it, estado: "suspendido" as const } : it
+        )
+      );
+      setMsg("Contrato suspendido");
+    } catch (e: any) {
+      // backend devuelve 422 si no está ACTIVO al suspender
+      setMsg(
+        e?.response?.data?.message ??
+          e?.message ??
+          "Error al suspender contrato"
+      );
+    }
+  };
+
+  const onBaja = async (c: Contrato) => {
+    if (!confirm(`¿Dar de BAJA contrato #${c.id}? Esta acción es definitiva.`))
+      return;
+    setMsg("");
+    try {
+      await darDeBajaContrato(c.id);
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === c.id ? { ...it, estado: "baja" as const } : it
+        )
+      );
+      setMsg("Contrato dado de baja");
+    } catch (e: any) {
+      setMsg(
+        e?.response?.data?.message ??
+          e?.message ??
+          "Error al dar de baja contrato"
       );
     }
   };
@@ -189,6 +253,7 @@ export default function Contratos() {
                 <Table.ColumnHeader>Plan</Table.ColumnHeader>
                 <Table.ColumnHeader>Estado</Table.ColumnHeader>
                 <Table.ColumnHeader>Alta</Table.ColumnHeader>
+                <Table.ColumnHeader>Acciones</Table.ColumnHeader>
               </Table.Row>
             </Table.Header>
             <Table.Body>
@@ -200,6 +265,34 @@ export default function Contratos() {
                   <Table.Cell>{c.estado}</Table.Cell>
                   <Table.Cell>
                     {c.fecha_alta ? fmt.format(new Date(c.fecha_alta)) : "-"}
+                  </Table.Cell>
+                  <Table.Cell>
+                    <HStack gap={2}>
+                      <Button
+                        size="xs"
+                        variant="subtle"
+                        onClick={() => onActivar(c)}
+                        disabled={c.estado === "activo" || c.estado === "baja"}
+                      >
+                        Activar
+                      </Button>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        onClick={() => onSuspender(c)}
+                        disabled={c.estado !== "activo"}
+                      >
+                        Suspender
+                      </Button>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        onClick={() => onBaja(c)}
+                        disabled={c.estado === "baja"}
+                      >
+                        Baja
+                      </Button>
+                    </HStack>
                   </Table.Cell>
                 </Table.Row>
               ))}

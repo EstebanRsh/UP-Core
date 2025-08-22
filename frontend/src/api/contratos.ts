@@ -33,3 +33,18 @@ export async function crearContrato(payload: {
   const { data } = await api.post("/contratos", payload);
   return data;
 }
+
+export async function activarContrato(id: number): Promise<{ message: string }> {
+  const { data } = await api.post(`/contratos/${id}/activar`);
+  return data;
+}
+
+export async function suspenderContrato(id: number): Promise<{ message: string }> {
+  const { data } = await api.post(`/contratos/${id}/suspender`);
+  return data;
+}
+
+export async function darDeBajaContrato(id: number): Promise<{ message: string }> {
+  const { data } = await api.post(`/contratos/${id}/baja`);
+  return data;
+}
