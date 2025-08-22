@@ -3,7 +3,9 @@ import AppLayout from "./layout/AppLayout";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Panel from "./pages/Panel";
+import Forbidden from "./pages/Forbidden";
 import ProtectedRoute from "./auth/ProtectedRoute";
+import RoleGuard from "./auth/RoleGuard";
 import { Text } from "@chakra-ui/react";
 
 export default function App() {
@@ -14,15 +16,19 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
 
+          {/* Panel requiere login + rol gerente u operador */}
           <Route
             path="/panel"
             element={
               <ProtectedRoute>
-                <Panel />
+                <RoleGuard allow={["gerente", "operador"]}>
+                  <Panel />
+                </RoleGuard>
               </ProtectedRoute>
             }
           />
 
+          <Route path="/forbidden" element={<Forbidden />} />
           <Route path="*" element={<Text>404 - Página no encontrada</Text>} />
         </Route>
       </Routes>
