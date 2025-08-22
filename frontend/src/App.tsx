@@ -4,6 +4,7 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Panel from "./pages/Panel";
 import Clientes from "./pages/Clientes";
+import Planes from "./pages/Planes";
 import Forbidden from "./pages/Forbidden";
 import ProtectedRoute from "./auth/ProtectedRoute";
 import RoleGuard from "./auth/RoleGuard";
@@ -34,6 +35,16 @@ export default function App() {
               <ProtectedRoute>
                 <RoleGuard allow={["gerente", "operador"]}>
                   <Clientes />
+                </RoleGuard>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/planes"
+            element={
+              <ProtectedRoute>
+                <RoleGuard allow={["gerente", "operador"]}>
+                  <Planes />
                 </RoleGuard>
               </ProtectedRoute>
             }
