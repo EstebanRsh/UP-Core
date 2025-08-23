@@ -7,7 +7,7 @@ import {
   Button,
 } from "@chakra-ui/react";
 import { Link as RouterLink, Outlet } from "react-router-dom";
-import ColorModeToggle from "../components/ColorModeToggle";
+import { ColorModeButton } from "../components/ui/color-mode";
 import { useAuth } from "../auth/AuthContext";
 
 function NavLink({ to, children }: { to: string; children: React.ReactNode }) {
@@ -56,7 +56,7 @@ export default function AppLayout() {
                   Salir
                 </Button>
               )}
-              <ColorModeToggle />
+              <ColorModeButton />
             </HStack>
           </Flex>
         </Container>

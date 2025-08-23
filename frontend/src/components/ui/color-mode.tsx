@@ -16,7 +16,7 @@ export function useColorMode() {
 
 export function ColorModeButton() {
   const { colorMode, toggleColorMode, mounted } = useColorMode();
-  if (!mounted) return null; // evita flash/hydration mismatch
+  if (!mounted) return null;
   return (
     <button
       aria-label="Cambiar tema"

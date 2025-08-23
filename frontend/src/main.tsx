@@ -1,13 +1,18 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { Providers } from "./providers";
+import { BrowserRouter } from "react-router-dom";
+import Providers from "./providers";
 import App from "./App";
-import "./index.css";
+import ErrorBoundary from "./ErrorBoundary";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <Providers>
-      <App />
+      <BrowserRouter>
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
+      </BrowserRouter>
     </Providers>
   </React.StrictMode>
 );
