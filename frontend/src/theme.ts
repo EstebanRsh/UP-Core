@@ -1,3 +1,4 @@
+// frontend/src/theme.ts (solo si querés sumar estas sombras/tipografía)
 import { createSystem, defaultConfig, defineConfig } from "@chakra-ui/react";
 
 const config = defineConfig({
@@ -20,6 +21,15 @@ const config = defineConfig({
       radii: {
         xl:  { value: "14px" },
         "2xl": { value: "20px" },
+      },
+      shadows: {
+        sm:  { value: "0 1px 2px rgba(0,0,0,0.06)" },
+        md:  { value: "0 6px 12px rgba(0,0,0,0.08)" },
+        lg:  { value: "0 12px 24px rgba(0,0,0,0.10)" },
+      },
+      fontSizes: {
+        "page-title": { value: "22px" },
+        "section-title": { value: "16px" },
       },
     },
     semanticTokens: {
