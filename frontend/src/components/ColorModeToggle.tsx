@@ -1,18 +1,17 @@
-import { Button } from "@chakra-ui/react";
-import { useEffect, useState } from "react";
-import { useTheme } from "next-themes";
+import { IconButton } from "@chakra-ui/react";
+import { useColorMode } from "../components/ui/color-mode"; // ajusta ruta
 
 export default function ColorModeToggle() {
-  const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return null;
-
+  const { colorMode, toggleColorMode } = useColorMode();
   return (
-    <Button
-      onClick={() => setTheme(resolvedTheme === "light" ? "dark" : "light")}
+    <IconButton
+      aria-label="Cambiar tema"
+      variant="ghost"
+      size="sm"
+      onClick={toggleColorMode}
+      title={colorMode === "dark" ? "Cambiar a claro" : "Cambiar a oscuro"}
     >
-      Modo {resolvedTheme === "light" ? "oscuro" : "claro"}
-    </Button>
+      {colorMode === "dark" ? "☀️" : "🌙"}
+    </IconButton>
   );
 }

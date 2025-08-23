@@ -13,7 +13,12 @@ import { useAuth } from "../auth/AuthContext";
 function NavLink({ to, children }: { to: string; children: React.ReactNode }) {
   return (
     <RouterLink to={to} style={{ textDecoration: "none" }}>
-      <Box as="span" _hover={{ color: "brand.500" }}>
+      <Box
+        as="span"
+        color="link.default"
+        _hover={{ color: "link.hover" }}
+        fontWeight={500}
+      >
         {children}
       </Box>
     </RouterLink>
@@ -24,11 +29,17 @@ export default function AppLayout() {
   const { token, logout } = useAuth();
 
   return (
-    <Box>
-      <Box as="header" borderBottomWidth="1px" py={3}>
+    <Box bg="bg.canvas" minH="100dvh" color="fg.default">
+      <Box
+        as="header"
+        borderBottomWidth="1px"
+        borderColor="border.default"
+        py={3}
+        bg="bg.card"
+      >
         <Container maxW="container.xl">
           <Flex align="center" justify="space-between" gap={4}>
-            <Heading size="md" color="brand.500">
+            <Heading size="md" color="link.default">
               UP-Core
             </Heading>
             <HStack gap={6}>
@@ -40,9 +51,8 @@ export default function AppLayout() {
               {token && <NavLink to="/contratos">Contratos</NavLink>}
               {token && <NavLink to="/facturas">Facturas</NavLink>}
               {token && <NavLink to="/pagos">Pagos</NavLink>}
-
               {token && (
-                <Button variant="ghost" onClick={logout}>
+                <Button variant="outline" size="sm" onClick={logout}>
                   Salir
                 </Button>
               )}
